@@ -2,7 +2,25 @@ from fastapi import FastAPI, Body, HTTPException
 from .models import WorldState
 from .generator import create_world, generate_event, apply_choice
 
-app = FastAPI()
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(             # docs_url 默认 "/docs"
+    redoc_url=None,        # 不要 ReDoc
+    openapi_url="/openapi.json",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # 生产时可写具体域名
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 给 Render 健康检查用的根路径
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
 SESSION: dict[str, WorldState] = {}
 
 @app.post("/new")
