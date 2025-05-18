@@ -151,24 +151,25 @@ def apply_choice(
 
     # ─── 计算 impact ────────────────────────────────
     if custom_input:
-        # 自由输入：让 GPT 判定 impact 和旁白
         prompt = (
-            f"玩家自定义行为：{custom_input}\n"
-            "基于世界观， 返回 JSON："
+            f"玩家自由行动：{custom_input}\n"
+            "请严格返回 JSON："
             '{"narration":"...", "impact":(-1|0|1)}'
         )
         rsp = client.chat.completions.create(
             model=MODEL,
             messages=[
-                {"role":"system","content":STYLE_HINT},
-                {"role":"user","content":prompt}
+                {"role": "system", "content": STYLE_HINT},
+                {"role": "user",   "content": prompt},
             ],
             response_format={"type":"json_object"},
             max_tokens=200,
+            temperature=0.7,
         )
-        data = json.loads(rsp.choices[0].message.content)
-        narration = data["narration"]
-        impact = data["impact"]
+        # ★ 用安全解析器，容错换行/markdown
+        data = _safe_json_parse(rsp.choices[0].message.content)
+        narration = data.get("narration", "（LLM 未返回旁白）")
+        impact = data.get("impact", 0)
     else:
         # 按钮：照旧从 options 里找
         opt = next(o for o in options if o["id"] == choice_id.upper())

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Body, HTTPException
 from .models import WorldState
-from .generator import create_world, generate_event, apply_choice
+from .generator import create_world, generate_event, apply_choice, generate_ending
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 

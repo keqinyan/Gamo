@@ -23,15 +23,16 @@ button:disabled{background:#aaa}
   0%{ transform:rotate(0deg); }
   100%{ transform:rotate(360deg); }
 }
+.btn{margin:4px;padding:6px 12px;border:0;border-radius:6px;cursor:pointer}
+.btnA{background:#99eb;color:#fff}
+.btnExec{background:#99a;color:#fff}
+.btnEnd{background:#99f;color:#fff}
 </style>
 </head>
 <body>
 <h2>🌟 Gamo RPG Demo</h2>
 <input id="tagInput" style="padding:6px;width:60%" placeholder="输入关键词，用逗号分隔，例如“穿越，搞笑”">
 <button onclick="start()" style="padding:6px 12px;margin-left:6px">开始冒险</button>
-<input id="customInput" placeholder="自由输入…" style="width:60%;padding:6px;display:none">
-<button id="execBtn" onclick="customAct()" style="display:none">执行</button>
-<button id="endBtn" onclick="endGame()" style="margin-top:14px">生成结局</button>
 <div id="loader"></div>
 <div id="history"></div>
 <div id="choices"></div>
@@ -47,7 +48,7 @@ function hideLoader(){ loader.style.display = "none"; }
 
 
 async function api(path, body){
-  showLoader();                          // ← 开始前显示
+  hideLoader();                          // ← 开始前显示
   const res = await fetch(`${API}/${path}`,{
     method:"POST",
     headers:{ "Content-Type":"application/json" },
@@ -60,27 +61,52 @@ function add(text){           // 渲染事件文字
   hist.innerHTML+=`<div class="bubble">${text.replace(/\\n/g,'<br>')}</div>`;
   window.scrollTo(0,document.body.scrollHeight);
 }
+
 function renderButtons(opts){
-  const box=document.getElementById("choices");
-  box.innerHTML="";
-  if(!opts.length){
-    // 结局以后等情况：无选项 → 隐藏自由输入
-    document.getElementById("customInput").style.display="none";
-    document.getElementById("execBtn").style.display="none";
-    return;
+  const box   = document.getElementById("choices");
+  box.innerHTML = "";                       // 清空旧内容
+
+  /* ====== 1. A/B/C 按钮 ====== */
+  opts.forEach(o=>{
+    const btn=document.createElement("button");
+    btn.textContent = `${o.id}. ${o.text}`;
+    btn.onclick     = ()=>choose(o.id);
+    btn.style = "margin:4px;padding:6px 12px;background:#2563eb;color:#fff;border:0;border-radius:6px;cursor:pointer";
+    box.appendChild(btn);
+  });
+
+  /* ====== 2. 自由输入框 + 执行按钮 ====== */
+  if(opts.length){                          // 生成事件才显示
+    const input = document.createElement("input");
+    input.id = "customInput";
+    input.placeholder = "自由输入…";
+    input.style = "margin:4px 6px;padding:6px;flex:1";
+
+    const exec = document.createElement("button");
+    exec.textContent = "执行";
+    exec.onclick     = customAct;
+    exec.style = "margin:4px;padding:6px 12px;background:#16a34a;color:#fff;border:0;border-radius:6px;cursor:pointer";
+
+    box.appendChild(input);
+    box.appendChild(exec);
+
+    // 回车直接执行
+    input.addEventListener("keydown", e=>{
+      if(e.key==="Enter") customAct();
+    });
   }
 
-  // 有选项 → 先显示输入框
-  document.getElementById("customInput").style.display="inline-block";
-  document.getElementById("execBtn").style.display="inline-block";
-
-  opts.forEach(o=>{
-    const b=document.createElement("button");
-    b.textContent=`${o.id}. ${o.text}`;
-    b.onclick=()=>choose(o.id);
-    box.appendChild(b);
-  });
+  /* ====== 3. 生成结局按钮 ====== */
+  if(opts.length){                          // 有选项时才可随时结局
+    const endBtn = document.createElement("button");
+    endBtn.textContent = "生成结局";
+    endBtn.onclick     = endGame;
+    endBtn.style = "margin:4px;padding:6px 12px;background:#dc2626;color:#fff;border:0;border-radius:6px;cursor:pointer";
+    box.appendChild(endBtn);
+  }
 }
+
+
 
 function disable(){[...box.children].forEach(b=>b.disabled=true);}
 async function customAct(){
