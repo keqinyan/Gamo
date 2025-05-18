@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Gamo RPG</title>
+<style>
+body{font-family:sans-serif;max-width:620px;margin:40px auto;padding:0 12px;color:#222}
+.bubble{background:#f6f6f6;border-radius:8px;padding:12px;margin:8px 0}
+button{margin:6px 6px 0 0;padding:6px 14px;border:0;border-radius:6px;
+       background:#2563eb;color:#fff;font-size:14px;cursor:pointer}
+button:disabled{background:#aaa}
+</style>
+</head>
+<body>
+<h2>🌟 Gamo RPG Demo</h2>
+<div id="history"></div>
+<div id="choices"></div>
+<button onclick="restart()" style="margin-top:12px">重新开始</button>
+
+<script>
+const API="https://gamo.onrender.com";   // ← BACKEND
+const hist=document.getElementById("history");
+const box=document.getElementById("choices");
+
+async function api(path,body){
+  const r=await fetch(`${API}/${path}`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body)
+  });
+  return r.json();
+}
+function add(text){           // 渲染事件文字
+  hist.innerHTML+=`<div class="bubble">${text.replace(/\\n/g,'<br>')}</div>`;
+  window.scrollTo(0,document.body.scrollHeight);
+}
+function renderButtons(opts){
+  box.innerHTML="";
+  opts.forEach(o=>{
+    const b=document.createElement("button");
+    b.textContent=`${o.id}. ${o.text}`;
+    b.onclick=()=>choose(o.id);
+    box.appendChild(b);
+  });
+}
+function disable(){[...box.children].forEach(b=>b.disabled=true);}
+
+async function start(){
+  const d=await api("new",["仙侠","都市"]);
+  hist.innerHTML="";                    // 清屏
+  add(d.event.text);
+  renderButtons(d.event.options);
+}
+async function choose(id){
+  disable();
+  const d=await api("choice",id);
+  add(d.result);
+  add(d.event.text);
+  renderButtons(d.event.options);
+}
+function restart(){start();}
+
+start();
+</script>
+</body>
+</html>
