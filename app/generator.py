@@ -15,7 +15,7 @@ from .models import WorldState, Character
 # 你也可以直接写 MODEL = "gpt-4o-mini"，但硬编码后切模型要改代码。
 MODEL = "gpt-4o-mini"#os.getenv("LLM_MODEL", "gpt-4o-mini")   # 没配就默认 mini
 STYLE_HINT = (
-    "作品风格充满脑洞与幽默、惊悚与反转，但又不失深度。用简体中文。"
+    "作品风格充满脑洞与幽默、惊悚与反转，但又不失深度。用简体中文。非常非常吸引人，掌握流量密码，作品读起来不像ai写的。"
 )
 
 client = OpenAI()
