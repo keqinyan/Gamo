@@ -40,12 +40,19 @@ def get_sid(req: Request, resp: Response) -> str:
 @app.post("/new")
 def new_game(tags: list[str], req: Request, resp: Response):
     sid = get_sid(req, resp)
-    ws = create_world(tags)
+    ws  = create_world(tags)
     evt = generate_event(ws)
+
     ws.flags["current_event_text"] = evt["text"]
-    ws.flags["last_options"] = evt["options"]
+    ws.flags["last_options"]       = evt["options"]
     SESSIONS[sid] = ws
-    return {"world": ws, "event": evt}
+
+    return {
+        "summary"   : ws.summary,        # ★ 新增
+        "main_plot" : ws.main_plot,      # ★ 新增
+        "event"     : evt
+    }
+
 
 class ChoiceIn(BaseModel):
     choice_id: str | None = None

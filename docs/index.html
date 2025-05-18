@@ -144,16 +144,21 @@ function disable(){
   renderButtons(d.event.options);
 }
 async function start(){
-  resetUI();     
-  hist.innerHTML = "";        // 清屏
+  resetUI();                           // 清空历史、按钮
   const tags = document.getElementById("tagInput").value
-                .split(",").map(s=>s.trim()).filter(Boolean);
+                 .split(",").map(s=>s.trim()).filter(Boolean);
   if(!tags.length){
     alert("请输入至少一个关键词开始游戏");
     return;
   }
-  const data = await api("new", tags);
-  showMainPlot(data.world.main_plot);
+
+  const data = await api("new", tags);      // ← fetch /new
+
+  /* ★★ 把世界简介 & 主线写在最顶上一条 ★★ */
+  add("🌍 世界观简介：<br>"+ data.summary);
+  add("🎯 主线目标："+ data.main_plot);
+
+  /* 渲染第一幕 */
   add(data.event.text);
   renderButtons(data.event.options);
 }
