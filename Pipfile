@@ -5,11 +5,11 @@ name = "pypi"
 
 [packages]
 fastapi = "*"
-uvicorn = "*"
 openai = "*"
 pydantic = {extras = ["dotenv"], version = "*"}
 jinja2 = "*"
 pyyaml = "*"
+uvicorn = {extras = ["standard"], version = "*"}
 
 [dev-packages]
 
