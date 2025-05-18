@@ -25,7 +25,7 @@ client = OpenAI()
 # ────────── Prompt 模板 ──────────
 WORLD_PROMPT = Template(
     """
-你是高自由度 RPG 的世界生成器。玩家关键词：{{ keywords }}。
+你是高自由度 RPG 的世界生成器。请用第二人称之类的手法让玩家身临其境，参与感拉满。玩家关键词：{{ keywords }}。
 请严格以 JSON 返回：
 {
   "summary": "...(≤200 字世界观)...",

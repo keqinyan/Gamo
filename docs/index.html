@@ -27,7 +27,7 @@ button:disabled{background:#aaa}
 </head>
 <body>
 <h2>🌟 Gamo RPG Demo</h2>
-<input id="tagInput" style="padding:6px;width:60%" placeholder="输入关键词，用逗号分隔">
+<input id="tagInput" style="padding:6px;width:60%" placeholder="输入关键词，用逗号分隔，例如“穿越，搞笑">
 <button onclick="start()" style="padding:6px 12px;margin-left:6px">开始冒险</button>
 <div id="loader"></div>
 <div id="history"></div>
@@ -73,7 +73,7 @@ async function start(){
   const tags = document.getElementById("tagInput").value
                 .split(",").map(s=>s.trim()).filter(Boolean);
   if(!tags.length){
-    alert("先输入至少一个关键词！");
+    alert("请输入至少一个关键词开始游戏");
     return;
   }
   const data = await api("new", tags);
