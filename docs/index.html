@@ -37,6 +37,7 @@ button:disabled{background:#aaa}
 <div id="history"></div>
 <div id="choices"></div>
 <button onclick="restart()" style="margin-top:12px">重新开始</button>
+<h3 id="plot"></h3>
 
 <script>
 const API="https://gamo.onrender.com";   // ← BACKEND
@@ -49,6 +50,9 @@ function hideLoader(){ loader.style.display = "none"; }
 function resetUI(){
   document.getElementById("history").innerHTML = "";
   document.getElementById("choices").innerHTML = "";
+}
+function showMainPlot(text){
+  document.getElementById("plot").textContent = "🎯 主线目标：「" + text + "」";
 }
 async function api(path, body){
   showLoader();
@@ -146,6 +150,7 @@ async function start(){
     return;
   }
   const data = await api("new", tags);
+  showMainPlot(data.world.main_plot);
   add(data.event.text);
   renderButtons(data.event.options);
 }
