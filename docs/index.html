@@ -138,18 +138,22 @@ async function choose(id){
   renderButtons(d.event.options);
 }
 async function endGame(){
-  showLoader();                 // 复用你的 spinner
+  showLoader();
   const d = await api("end", {});
   hideLoader();
 
-  // 隐藏选择按钮 & 输入框
+  // 先隐藏输入框
+  const inp = document.getElementById("customInput");
+  if (inp) inp.style.display = "none";
+
+  // 然后再清空按钮区
   document.getElementById("choices").innerHTML = "";
-  document.getElementById("customInput").style.display = "none";
-  document.getElementById("endBtn").disabled = true;
+
 
   add("=== 结局 · " + d.title + " ===");
   add(d.ending);
 }
+
 
 function restart(){start();}
 
