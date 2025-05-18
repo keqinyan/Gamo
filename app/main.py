@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Body, HTTPException
+from fastapi import FastAPI, Body, HTTPException, Request, Response
 from .models import WorldState
 from .generator import create_world, generate_event, apply_choice, generate_ending
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from uuid import uuid4
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -18,18 +19,23 @@ app.add_middleware(
 def root():
     return {"status": "ok"}
 
-SESSION: dict[str, WorldState] = {}
+SESSIONS: dict[str, WorldState] = {}
+
+def get_sid(req: Request, resp: Response) -> str:
+    sid = req.cookies.get("sid")
+    if not sid:
+        sid = uuid4().hex
+        resp.set_cookie("sid", sid, max_age=60*60*24*30)   # 30 天
+    return sid
 
 @app.post("/new")
-def new_game(tags: list[str] = Body(...)):
+def new_game(tags: list[str], req: Request, resp: Response):
+    sid = get_sid(req, resp)
     ws = create_world(tags)
     evt = generate_event(ws)
-
     ws.flags["current_event_text"] = evt["text"]
     ws.flags["last_options"] = evt["options"]
-    ws.flags["last_choice_text"] = ""        # 开局为空
-    SESSION["ws"] = ws
-
+    SESSIONS[sid] = ws
     return {"world": ws, "event": evt}
 
 class ChoiceIn(BaseModel):
@@ -37,8 +43,11 @@ class ChoiceIn(BaseModel):
     custom_input: str | None = None
 
 @app.post("/choice")
-def choose(payload: ChoiceIn):
-    ws = SESSION.get("ws")
+def choose(payload: ChoiceIn, req: Request, resp: Response):
+    sid = get_sid(req, resp)
+    ws = SESSIONS.get(sid)
+    if not ws:
+        raise HTTPException(400, "请先 /new 开局")
     if ws is None:
         raise HTTPException(400, "请先 /new 开局")
 
@@ -57,7 +66,7 @@ def choose(payload: ChoiceIn):
         options   = options,
         custom_input = payload.custom_input,
     )
-    SESSION["ws"] = new_ws
+    SESSIONS["ws"] = new_ws
 
     # ─── 生成下一事件 ────────────────────────────────
     nxt_evt = generate_event(new_ws)
@@ -68,11 +77,11 @@ def choose(payload: ChoiceIn):
 
 @app.post("/end")
 def end_game():
-    ws = SESSION.get("ws")
+    ws = SESSIONS.get("ws")
     if ws is None:
         raise HTTPException(400, "没有进行中的游戏")
 
     ending = generate_ending(ws)
     # 可在此处把 ws 存档到数据库，然后清 session
-    SESSION.pop("ws", None)
+    SESSIONS.pop("ws", None)
     return ending
