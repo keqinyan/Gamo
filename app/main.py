@@ -15,7 +15,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # 给 Render 健康检查用的根路径
 @app.get("/")
 def root():
@@ -27,7 +26,15 @@ def get_sid(req: Request, resp: Response) -> str:
     sid = req.cookies.get("sid")
     if not sid:
         sid = uuid4().hex
-        resp.set_cookie("sid", sid, max_age=60*60*24*30)   # 30 天
+        resp.set_cookie(
+        "sid",
+        sid,
+        max_age = 60*60*24*30,   # 30 天
+        path    = "/",
+        samesite = "none",       # ★ 关键
+        secure   = True          # ★ 跨域时必须 https + Secure
+        )
+   # 30 天
     return sid
 
 @app.post("/new")
