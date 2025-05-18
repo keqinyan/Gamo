@@ -17,7 +17,7 @@ from openai import OpenAI
 # 你也可以直接写 MODEL = "gpt-4o-mini"，但硬编码后切模型要改代码。
 MODEL = "gpt-4o-mini"#os.getenv("LLM_MODEL", "gpt-4o-mini")   # 没配就默认 mini
 STYLE_HINT = (
-    "作品风格充满脑洞与幽默、惊悚与反转，但又不失深度。用简体中文。非常非常吸引人，掌握流量密码，作品读起来不像ai写的。"
+    "作品风格充满脑洞与幽默、惊悚与反转，但又不失深度。用简体中文。非常非常吸引人，掌握流量密码，作品读起来不像ai写的。请用第二人称，尽可能让玩家身临其境，参与感拉满。"
 )
 
 client = OpenAI()
@@ -25,7 +25,7 @@ client = OpenAI()
 # ────────── Prompt 模板 ──────────
 WORLD_PROMPT = Template(
     """
-你是高自由度 RPG 的世界生成器。请用第二人称之类的手法让玩家身临其境，参与感拉满。玩家关键词：{{ keywords }}。
+你是高自由度 RPG 的世界生成器。请用第二人称，尽可能让玩家身临其境，参与感拉满。玩家关键词：{{ keywords }}。
 请严格以 JSON 返回：
 {
   "summary": "...(≤200 字世界观)...",
