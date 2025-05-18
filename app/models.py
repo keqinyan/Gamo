@@ -8,8 +8,10 @@ class Character(BaseModel):
     traits: List[str]
 
 class WorldState(BaseModel):
-    genre_tags: List[str]
+    genre_tags: list[str]
     summary: str
-    characters: Dict[str, Character]
-    timeline: List[Dict[str, Any]]
-    flags: Dict[str, Any] = {}
+    main_plot: str                     
+    characters: dict[str, Character]
+    timeline: list[dict] = []
+    flags: dict = {}
+
