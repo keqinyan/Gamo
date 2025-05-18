@@ -48,7 +48,7 @@ function hideLoader(){ loader.style.display = "none"; }
 
 
 async function api(path, body){
-  hideLoader();                          // ← 开始前显示
+  showLoader();                          // ← 开始前显示
   const res = await fetch(`${API}/${path}`,{
     method:"POST",
     headers:{ "Content-Type":"application/json" },
