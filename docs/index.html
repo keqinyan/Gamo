@@ -13,6 +13,8 @@ button:disabled{background:#aaa}
 </head>
 <body>
 <h2>🌟 Gamo RPG Demo</h2>
+<input id="tagInput" style="padding:6px;width:60%" placeholder="输入关键词，用逗号分隔">
+<button onclick="start()" style="padding:6px 12px;margin-left:6px">开始冒险</button>
 <div id="history"></div>
 <div id="choices"></div>
 <button onclick="restart()" style="margin-top:12px">重新开始</button>
@@ -46,14 +48,20 @@ function renderButtons(opts){
 function disable(){[...box.children].forEach(b=>b.disabled=true);}
 
 async function start(){
-  const d=await api("new",["仙侠","都市"]);
-  hist.innerHTML="";                    // 清屏
-  add(d.event.text);
-  renderButtons(d.event.options);
+  hist.innerHTML = "";        // 清屏
+  const tags = document.getElementById("tagInput").value
+                .split(",").map(s=>s.trim()).filter(Boolean);
+  if(!tags.length){
+    alert("先输入至少一个关键词！");
+    return;
+  }
+  const data = await api("new", tags);
+  add(data.event.text);
+  renderButtons(data.event.options);
 }
 async function choose(id){
   disable();
-  const d=await api("choice",id);
+  const d = await api("choice", { choice_id: id });   // ★ 发送 JSON 对象
   add(d.result);
   add(d.event.text);
   renderButtons(d.event.options);

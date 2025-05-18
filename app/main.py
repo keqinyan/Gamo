@@ -4,10 +4,7 @@ from .generator import create_world, generate_event, apply_choice
 
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(             # docs_url 默认 "/docs"
-    redoc_url=None,        # 不要 ReDoc
-    openapi_url="/openapi.json",
-)
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 app.add_middleware(
     CORSMiddleware,
