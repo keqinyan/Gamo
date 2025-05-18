@@ -9,10 +9,12 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # 生产时可写具体域名
+    allow_origins=["https://keqinyan.github.io"],  # 或你的自定义域名
+    allow_credentials=True,                        # ★ 必须
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # 给 Render 健康检查用的根路径
 @app.get("/")
