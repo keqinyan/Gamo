@@ -29,7 +29,7 @@ button:disabled{background:#aaa}
 .btnEnd{background:#99f;color:#fff}
 </style>
 </head>
-<body>
+<body onload="resetUI()">
 <h2>🌟 Gamo RPG Demo</h2>
 <input id="tagInput" style="padding:6px;width:60%" placeholder="输入关键词，用逗号分隔，例如“穿越，搞笑”">
 <button onclick="start()" style="padding:6px 12px;margin-left:6px">开始冒险</button>
@@ -46,17 +46,28 @@ const loader = document.getElementById("loader");
 function showLoader(){ loader.style.display = "block"; }
 function hideLoader(){ loader.style.display = "none"; }
 
-
+function resetUI(){
+  document.getElementById("history").innerHTML = "";
+  document.getElementById("choices").innerHTML = "";
+}
 async function api(path, body){
-  showLoader();                          // ← 开始前显示
-  const res = await fetch(`${API}/${path}`,{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify(body)
+  showLoader();
+  const res = await fetch(`${API}/${path}`, {
+    method: "POST",
+    headers: { "Content-Type":"application/json" },
+    body: JSON.stringify(body),
+    credentials: "include"          // ★ 跨域携带 cookie!
   });
-  hideLoader();                          // ← 收到响应后隐藏
+  hideLoader();
+
+  if(!res.ok){
+    const txt = await res.text();
+    alert(`服务器错误:\n${txt}`);
+    throw new Error(txt);
+  }
   return res.json();
 }
+
 function add(text){           // 渲染事件文字
   hist.innerHTML+=`<div class="bubble">${text.replace(/\\n/g,'<br>')}</div>`;
   window.scrollTo(0,document.body.scrollHeight);
@@ -106,10 +117,17 @@ function renderButtons(opts){
   }
 }
 
+function disable(){
+  // 挑选最常用的三类按钮
+  const selectors = [
+    "#choices button",         // A/B/C + 执行 + 生成结局
+    "#loader + button",        // "重新开始" 按钮（看实际结构可删）
+  ];
 
-
-function disable(){[...box.children].forEach(b=>b.disabled=true);}
-async function customAct(){
+  document.querySelectorAll(selectors.join(",")).forEach(btn=>{
+    btn.disabled = true;
+  });
+}async function customAct(){
   const text = document.getElementById("customInput").value.trim();
   if(!text) return;
   document.getElementById("customInput").value="";
@@ -119,6 +137,7 @@ async function customAct(){
   renderButtons(d.event.options);
 }
 async function start(){
+  resetUI();     
   hist.innerHTML = "";        // 清屏
   const tags = document.getElementById("tagInput").value
                 .split(",").map(s=>s.trim()).filter(Boolean);
@@ -137,19 +156,14 @@ async function choose(id){
   add(d.event.text);
   renderButtons(d.event.options);
 }
+
 async function endGame(){
+  disable();               // 先把所有旧按钮灰掉
   showLoader();
   const d = await api("end", {});
   hideLoader();
 
-  // 先隐藏输入框
-  const inp = document.getElementById("customInput");
-  if (inp) inp.style.display = "none";
-
-  // 然后再清空按钮区
   document.getElementById("choices").innerHTML = "";
-
-
   add("=== 结局 · " + d.title + " ===");
   add(d.ending);
 }
