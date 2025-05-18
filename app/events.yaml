@@ -1,0 +1,8 @@
+- id: roadside_encounter
+  genre: [仙侠, 玄幻]
+  template: "{{player}}行至荒山，忽见{{npc}}奄奄一息倒在路旁。"
+  options:
+    - text: "救助{{npc}}"
+      tag: kind
+    - text: "视而不见继续赶路"
+      tag: cold
