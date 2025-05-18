@@ -10,6 +10,8 @@ from typing import List, Dict, Tuple
 from jinja2 import Template
 from openai import OpenAI
 from .models import WorldState, Character
+import json, re, time
+from openai import OpenAI
 
 # ────────── 配置 ──────────
 # 你也可以直接写 MODEL = "gpt-4o-mini"，但硬编码后切模型要改代码。
@@ -90,22 +92,50 @@ def create_world(tags: List[str]) -> WorldState:
     )
 
 # ────────── 生成事件 ──────────
-def generate_event(world: WorldState) -> Dict:
+def _safe_json_parse(text: str) -> dict:
+    """
+    尝试把模型输出解析成 dict：
+    1. 直接 json.loads
+    2. 正则提取首个 {...}
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", text, re.S)
+        if m:
+            return json.loads(m.group())
+        raise  # 留给调用方处理
+
+def generate_event(world: WorldState, retry: int = 1) -> dict:
     prompt = EVENT_PROMPT.render(
         summary=world.summary,
         last_event=world.flags.get("current_event_text", ""),
         last_choice=world.flags.get("last_choice_text", ""),
     )
-    resp = client.chat.completions.create(
+
+    rsp = client.chat.completions.create(
         model=MODEL,
         messages=[
             {"role": "system", "content": STYLE_HINT},
-            {"role": "user", "content": prompt},
+            # 额外强调只能 JSON
+            {"role": "user",    "content": prompt + "\n\n⚠️ 请严格仅输出 JSON 对象，禁止任何注释或多余文本。"},
         ],
         response_format={"type": "json_object"},
-        max_tokens=400,
+        max_tokens=500,
+        temperature=0.7,
     )
-    return json.loads(resp.choices[0].message.content)
+
+    content = rsp.choices[0].message.content
+    try:
+        return _safe_json_parse(content)
+    except json.JSONDecodeError as e:
+        if retry > 0:
+            print("WARN json decode error, retry once …")
+            time.sleep(0.5)                 # 给模型节拍
+            return generate_event(world, retry - 1)
+        # 把错误写入日志并抛，让前端看到可提示“服务器繁忙”
+        print("FATAL cannot parse LLM JSON:\n", content[:800])
+        raise e
 
 # ────────── 结算选择 ──────────
 def apply_choice(
