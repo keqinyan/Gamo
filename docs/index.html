@@ -29,8 +29,9 @@ button:disabled{background:#aaa}
 <h2>🌟 Gamo RPG Demo</h2>
 <input id="tagInput" style="padding:6px;width:60%" placeholder="输入关键词，用逗号分隔，例如“穿越，搞笑”">
 <button onclick="start()" style="padding:6px 12px;margin-left:6px">开始冒险</button>
-<input id="customInput" placeholder="自由输入..." style="width:60%;padding:6px">
-<button onclick="customAct()">执行</button>
+<input id="customInput" placeholder="自由输入…" style="width:60%;padding:6px;display:none">
+<button id="execBtn" onclick="customAct()" style="display:none">执行</button>
+<button id="endBtn" onclick="endGame()" style="margin-top:14px">生成结局</button>
 <div id="loader"></div>
 <div id="history"></div>
 <div id="choices"></div>
@@ -60,7 +61,19 @@ function add(text){           // 渲染事件文字
   window.scrollTo(0,document.body.scrollHeight);
 }
 function renderButtons(opts){
+  const box=document.getElementById("choices");
   box.innerHTML="";
+  if(!opts.length){
+    // 结局以后等情况：无选项 → 隐藏自由输入
+    document.getElementById("customInput").style.display="none";
+    document.getElementById("execBtn").style.display="none";
+    return;
+  }
+
+  // 有选项 → 先显示输入框
+  document.getElementById("customInput").style.display="inline-block";
+  document.getElementById("execBtn").style.display="inline-block";
+
   opts.forEach(o=>{
     const b=document.createElement("button");
     b.textContent=`${o.id}. ${o.text}`;
@@ -68,6 +81,7 @@ function renderButtons(opts){
     box.appendChild(b);
   });
 }
+
 function disable(){[...box.children].forEach(b=>b.disabled=true);}
 async function customAct(){
   const text = document.getElementById("customInput").value.trim();
@@ -97,6 +111,20 @@ async function choose(id){
   add(d.event.text);
   renderButtons(d.event.options);
 }
+async function endGame(){
+  showLoader();                 // 复用你的 spinner
+  const d = await api("end", {});
+  hideLoader();
+
+  // 隐藏选择按钮 & 输入框
+  document.getElementById("choices").innerHTML = "";
+  document.getElementById("customInput").style.display = "none";
+  document.getElementById("endBtn").disabled = true;
+
+  add("=== 结局 · " + d.title + " ===");
+  add(d.ending);
+}
+
 function restart(){start();}
 
 start();

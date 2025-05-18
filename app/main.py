@@ -65,3 +65,14 @@ def choose(payload: ChoiceIn):
     new_ws.flags["last_options"]       = nxt_evt["options"]
 
     return {"result": result, "event": nxt_evt}
+
+@app.post("/end")
+def end_game():
+    ws = SESSION.get("ws")
+    if ws is None:
+        raise HTTPException(400, "没有进行中的游戏")
+
+    ending = generate_ending(ws)
+    # 可在此处把 ws 存档到数据库，然后清 session
+    SESSION.pop("ws", None)
+    return ending

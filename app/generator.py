@@ -139,33 +139,94 @@ def generate_event(world: WorldState, retry: int = 1) -> dict:
 
 # ────────── 结算选择 ──────────
 def apply_choice(
-    world: WorldState, choice_id: str, options: List[Dict]
-) -> Tuple[WorldState, str]:
-    if not options:
-        raise ValueError("缺少上一轮选项")
+    world: WorldState,
+    choice_id: str | None,
+    options: list[dict],
+    custom_input: str | None = None,
+) -> tuple[WorldState, str]:
+    """
+    • choice_id：玩家点的 A/B/C；None 表示用自定义输入
+    • custom_input：自由输入文本；None 表示走按钮逻辑
+    """
+
+    # ─── 计算 impact ────────────────────────────────
     if custom_input:
-        prompt = f"玩家说：{custom_input}。你作为旁白叙述后果并返回 impact。"
-        # 让 GPT 输出 {"narration":"...", "impact":0, "new_flag":{...}}
+        # 自由输入：让 GPT 判定 impact 和旁白
+        prompt = (
+            f"玩家自定义行为：{custom_input}\n"
+            "基于世界观， 返回 JSON："
+            '{"narration":"...", "impact":(-1|0|1)}'
+        )
+        rsp = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role":"system","content":STYLE_HINT},
+                {"role":"user","content":prompt}
+            ],
+            response_format={"type":"json_object"},
+            max_tokens=200,
+        )
+        data = json.loads(rsp.choices[0].message.content)
+        narration = data["narration"]
+        impact = data["impact"]
     else:
-        opt = next((o for o in options if o["id"] == choice_id.upper()), None)
-        if not opt:
-            raise ValueError("非法选项 id")
+        # 按钮：照旧从 options 里找
+        opt = next(o for o in options if o["id"] == choice_id.upper())
+        narration = f"你选择了【{opt['text']}】。"
+        impact = opt.get("impact", 0)
 
-        karma = world.flags.get("karma", 0) + opt["impact"]
-        world.flags["karma"] = karma
-        world.flags["last_choice_text"] = opt["text"]          # 记录给下一轮
+    # ─── 更新业障 / 时间线 ───────────────────────────
+    karma_new = world.flags.get("karma", 0) + impact
+    world.flags["karma"] = karma_new
 
-        world.timeline.append(
-            {
-                "event": world.flags.get("current_event_text", ""),
-                "choice": opt["text"],
-                "impact": opt["impact"],
-                "karma": karma,
-            }
-        )
+    world.timeline.append(
+        {
+            "event": world.flags.get("current_event_text", ""),
+            "choice": custom_input or opt["text"],
+            "impact": impact,
+            "karma": karma_new,
+        }
+    )
 
-        narr = (
-            f"你选择了【{opt['text']}】。"
-            f"业障变化 {opt['impact']:+d}，当前业障 {karma}。"
-        )
-    return world, narr
+    # 返回带业障信息的旁白
+    narration += f" 业障变化 {impact:+d}，当前业障 {karma_new}。"
+    return world, narration
+
+ENDING_PROMPT = Template("""
+<世界观>
+{{ summary }}
+</世界观>
+
+<玩家旅程大事记>
+{% for t in timeline[-5:] %}
+- {{ loop.index }}. {{ t.event|truncate(50) }} → 选择: {{ t.choice }} (业障±{{ t.impact }})
+{% endfor %}
+</玩家旅程大事记>
+
+玩家最终业障值：{{ karma }}  
+请写一个 150~200 字的结局，基于业障高低展现善果/恶果/平淡收场。
+
+返回严格 JSON：
+{
+  "title":"...",
+  "ending":"..."
+}
+""".strip())
+
+def generate_ending(world: WorldState) -> dict:
+    prompt = ENDING_PROMPT.render(
+        summary = world.summary,
+        timeline = world.timeline,
+        karma   = world.flags.get("karma", 0)
+    )
+    rsp = client.chat.completions.create(
+        model = MODEL,
+        messages = [
+            {"role":"system","content":STYLE_HINT},
+            {"role":"user","content": prompt},
+        ],
+        response_format={"type":"json_object"},
+        max_tokens=500,
+        temperature=0.7,
+    )
+    return json.loads(rsp.choices[0].message.content)
