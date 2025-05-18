@@ -29,6 +29,8 @@ button:disabled{background:#aaa}
 <h2>🌟 Gamo RPG Demo</h2>
 <input id="tagInput" style="padding:6px;width:60%" placeholder="输入关键词，用逗号分隔，例如“穿越，搞笑”">
 <button onclick="start()" style="padding:6px 12px;margin-left:6px">开始冒险</button>
+<input id="customInput" placeholder="自由输入..." style="width:60%;padding:6px">
+<button onclick="customAct()">执行</button>
 <div id="loader"></div>
 <div id="history"></div>
 <div id="choices"></div>
@@ -67,7 +69,15 @@ function renderButtons(opts){
   });
 }
 function disable(){[...box.children].forEach(b=>b.disabled=true);}
-
+async function customAct(){
+  const text = document.getElementById("customInput").value.trim();
+  if(!text) return;
+  document.getElementById("customInput").value="";
+  const d = await api("choice", { custom_input: text });
+  add(d.result);
+  add(d.event.text);
+  renderButtons(d.event.options);
+}
 async function start(){
   hist.innerHTML = "";        // 清屏
   const tags = document.getElementById("tagInput").value

@@ -143,25 +143,29 @@ def apply_choice(
 ) -> Tuple[WorldState, str]:
     if not options:
         raise ValueError("缺少上一轮选项")
-    opt = next((o for o in options if o["id"] == choice_id.upper()), None)
-    if not opt:
-        raise ValueError("非法选项 id")
+    if custom_input:
+        prompt = f"玩家说：{custom_input}。你作为旁白叙述后果并返回 impact。"
+        # 让 GPT 输出 {"narration":"...", "impact":0, "new_flag":{...}}
+    else:
+        opt = next((o for o in options if o["id"] == choice_id.upper()), None)
+        if not opt:
+            raise ValueError("非法选项 id")
 
-    karma = world.flags.get("karma", 0) + opt["impact"]
-    world.flags["karma"] = karma
-    world.flags["last_choice_text"] = opt["text"]          # 记录给下一轮
+        karma = world.flags.get("karma", 0) + opt["impact"]
+        world.flags["karma"] = karma
+        world.flags["last_choice_text"] = opt["text"]          # 记录给下一轮
 
-    world.timeline.append(
-        {
-            "event": world.flags.get("current_event_text", ""),
-            "choice": opt["text"],
-            "impact": opt["impact"],
-            "karma": karma,
-        }
-    )
+        world.timeline.append(
+            {
+                "event": world.flags.get("current_event_text", ""),
+                "choice": opt["text"],
+                "impact": opt["impact"],
+                "karma": karma,
+            }
+        )
 
-    narr = (
-        f"你选择了【{opt['text']}】。"
-        f"业障变化 {opt['impact']:+d}，当前业障 {karma}。"
-    )
+        narr = (
+            f"你选择了【{opt['text']}】。"
+            f"业障变化 {opt['impact']:+d}，当前业障 {karma}。"
+        )
     return world, narr

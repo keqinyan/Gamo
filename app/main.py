@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Body, HTTPException
 from .models import WorldState
 from .generator import create_world, generate_event, apply_choice
-
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -32,18 +32,36 @@ def new_game(tags: list[str] = Body(...)):
 
     return {"world": ws, "event": evt}
 
+class ChoiceIn(BaseModel):
+    choice_id: str | None = None
+    custom_input: str | None = None
+
 @app.post("/choice")
-def choose(choice_id: str = Body(..., embed=True)):
+def choose(payload: ChoiceIn):
     ws = SESSION.get("ws")
     if ws is None:
         raise HTTPException(400, "请先 /new 开局")
 
-    options = ws.flags.get("last_options")
-    new_ws, result = apply_choice(ws, choice_id, options)
+    # ─── 判断是按钮还是自由文本 ───────────────────────
+    if payload.custom_input:
+        use_choice_id = None
+        options = []                         # 按钮选项用不到
+    else:
+        use_choice_id = payload.choice_id
+        options = ws.flags.get("last_options", [])
 
-    nxt = generate_event(new_ws)
-    new_ws.flags["current_event_text"] = nxt["text"]
-    new_ws.flags["last_options"] = nxt["options"]
+    # ─── 结算本轮 ───────────────────────────────────
+    new_ws, result = apply_choice(
+        ws,
+        choice_id = use_choice_id,
+        options   = options,
+        custom_input = payload.custom_input,
+    )
     SESSION["ws"] = new_ws
 
-    return {"result": result, "event": nxt}
+    # ─── 生成下一事件 ────────────────────────────────
+    nxt_evt = generate_event(new_ws)
+    new_ws.flags["current_event_text"] = nxt_evt["text"]
+    new_ws.flags["last_options"]       = nxt_evt["options"]
+
+    return {"result": result, "event": nxt_evt}
