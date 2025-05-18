@@ -11,13 +11,16 @@ button{margin:6px 6px 0 0;padding:6px 14px;border:0;border-radius:6px;
 button:disabled{background:#aaa}
 /* ─── 加载中的转圈 ─────────────────────── */
 #loader{
-  display:none;                 /* 默认隐藏 */
+  display:none;
+  position:fixed;          /* ★ 脱离文档流，固定在屏幕 */
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  width:40px;height:40px;
   border:4px solid #f3f3f3;
-  border-top:4px solid #99eb; /* 主题色 */
+  border-top:4px solid #2563eb;
   border-radius:50%;
-  width:32px;height:32px;
-  animation: spin 1s linear infinite;
-  margin:20px auto;
+  animation:spin 1s linear infinite;
+  z-index:9999;            /* 盖过一切 */
 }
 @keyframes spin{
   0%{ transform:rotate(0deg); }

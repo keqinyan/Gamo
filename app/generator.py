@@ -134,18 +134,26 @@ def generate_event(world: WorldState, retry:int=1) -> dict:
         raise
 
 # ────────── 处理选择 ──────────
+# ────────── 结算选择 ──────────
 def apply_choice(
     world: WorldState,
     choice_id: str | None,
     options: list[dict],
     custom_input: str | None = None,
-) -> Tuple[WorldState, str]:
+) -> tuple[WorldState, str]:
+    """
+    • choice_id：玩家点的 A/B/C；None 表示走自定义输入
+    • custom_input：自由输入文本；None 表示按钮逻辑
+    返回 (world, narration)；narration 只做即时反馈 + 业障变化，不展开剧情
+    """
 
-    # 1) 解析 impact & narration
+    # ── 1) 计算 impact & 得到一句即时反馈 ─────────────────────────
     if custom_input:
+        # 让 GPT 只给一句反馈
         prompt = (
             f"玩家自由行动：{custom_input}\n"
-            "请严格返回 JSON：{\"narration\":\"...\",\"impact\":(-1|0|1)}"
+            "请严格返回 JSON："
+            '{"narration":"(一句话描述玩家选择)","impact":(-1|0|1)}'
         )
         rsp = client.chat.completions.create(
             model=MODEL,
@@ -154,33 +162,36 @@ def apply_choice(
                 {"role":"user","content":prompt},
             ],
             response_format={"type":"json_object"},
-            max_tokens=200,
+            max_tokens=120,
             temperature=0.7,
         )
-        data = _safe_json_parse(rsp.choices[0].message.content)
-        narration = data.get("narration","")
-        impact    = data.get("impact",0)
+        data       = _safe_json_parse(rsp.choices[0].message.content)
+        instant_fb = data.get("narration","")
+        impact     = data.get("impact",0)
+        choice_txt = custom_input
     else:
-        opt = next(o for o in options if o["id"] == choice_id.upper())
-        narration = f"你选择了【{opt['text']}】。"
-        impact    = opt.get("impact",0)
+        # 按钮分支
+        opt        = next(o for o in options if o["id"] == choice_id.upper())
+        choice_txt = opt["text"]
+        impact     = opt.get("impact",0)
+        instant_fb = f"你选择了【{choice_txt}】。"
 
-    # 2) 更新业障
+    # ── 2) 更新业障 & 时间线 ────────────────────────────────────
     karma = world.flags.get("karma",0) + impact
     world.flags["karma"] = karma
 
-    # 3) 写时间线
     world.timeline.append({
-        "event":  world.flags.get("current_event_text",""),
-        "choice": custom_input or (opt["text"] if not custom_input else custom_input),
+        "event" : world.flags.get("current_event_text",""),
+        "choice": choice_txt,
         "impact": impact,
-        "karma":  karma,
+        "karma" : karma,
     })
 
-    # 4) 写 last_choice_text（供下一幕承接）
-    world.flags["last_choice_text"] = custom_input or (opt["text"] if not custom_input else custom_input)
+    # 把本轮选择写入 flags，供下一幕 prompt 承接
+    world.flags["last_choice_text"] = choice_txt
 
-    narration += f" 业障变化 {impact:+d}，当前业障 {karma}。"
+    # ── 3) 拼最终旁白（即时反馈 + 业障数字） ───────────────────
+    narration = f"{instant_fb} 业障变化 {impact:+d}，当前业障 {karma}。"
     return world, narration
 
 # ────────── 生成结局 ──────────
