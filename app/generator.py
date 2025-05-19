@@ -153,37 +153,39 @@ def apply_choice(
     choice_id: str | None,
     options: list[dict],
     custom_input: str | None = None,
-    lang: str = "zh"
-) -> Tuple[WorldState, str]:
+    lang: str = "zh",
+) -> tuple[WorldState, str]:
 
-    # ① 即时反馈 & impact
-    if custom_input:
+    # ① 生成「即时反馈」+ impact ---------------------------------
+    if custom_input:                                  # 自由输入
         prompt = (
-            f"玩家自由行动：{custom_input}\n"
-            "请严格返回 JSON："
-            '{"narration":"(一句话描述玩家选择)","impact":(-1|0|1)}'
+            f"Player action: {custom_input}\n"
+            'Return strict JSON: {"narration":"...","impact":(-1|0|1)}'
         )
-        resp = client.chat.completions.create(
-            model   = MODEL,
+        rsp  = client.chat.completions.create(
+            model = MODEL,
             messages=[
-                {"role":"system","content": STYLE_HINT + lang_hint(lang)},
-                {"role":"user","content": prompt},
+                {"role":"system","content":STYLE_HINT + lang_hint(lang)},
+                {"role":"user","content":prompt},
             ],
             response_format={"type":"json_object"},
             max_tokens=120,
             temperature=0.7,
         )
-        d          = _safe_json_parse(resp.choices[0].message.content)
-        instant_fb = d.get("narration","")
-        impact     = d.get("impact",0)
-        choice_txt = custom_input
-    else:
+        data        = _safe_json_parse(rsp.choices[0].message.content)
+        instant_fb  = data.get("narration","")
+        impact      = data.get("impact",0)
+        choice_txt  = custom_input
+    else:                                             # 按钮 A/B/C
         opt        = next(o for o in options if o["id"] == choice_id.upper())
         choice_txt = opt["text"]
         impact     = opt.get("impact",0)
-        instant_fb = f"你选择了【{choice_txt}】。"
+        instant_fb = (
+            f"你选择了【{choice_txt}】。" if lang=="zh"
+            else f'You chose "{choice_txt}".'
+        )
 
-    # ② 更新业障 & 时间线
+    # ② 更新业障 & 时间线 -----------------------------------------
     karma = world.flags.get("karma",0) + impact
     world.flags["karma"] = karma
     world.timeline.append({
@@ -194,8 +196,14 @@ def apply_choice(
     })
     world.flags["last_choice_text"] = choice_txt
 
-    narration = f"{instant_fb} 业障变化 {impact:+d}，当前业障 {karma}。"
+    # ③ 拼最终旁白（根据语言） -----------------------------------
+    if lang == "zh":
+        narration = f"{instant_fb} 业障变化 {impact:+d}，当前业障 {karma}。"
+    else:
+        narration = f"{instant_fb} Karma change {impact:+d}, current karma {karma}."
+
     return world, narration
+
 
 # ────────── 生成结局 ──────────
 def generate_ending(world: WorldState, lang: str = "zh", retry: int = 1) -> dict:
