@@ -4,12 +4,13 @@ app/generator.py  ·  连续剧情 + 主线目标 + zh/en 多语言
 from __future__ import annotations
 import os, json, re, time
 from uuid import uuid4
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 
 from jinja2 import Template
 from openai import OpenAI
 from .models import WorldState, Character
-
+import random                           # ★ 新增
+STAT_KEYS = ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
 # ────────── 通用配置 ──────────
 MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 STYLE_HINT = (
@@ -26,21 +27,32 @@ LANG_HINT = {
 }
 def lang_hint(lang: str) -> str:
     return LANG_HINT.get(lang, LANG_HINT["zh"])
+def roll_stats():
+    """6 维属性各掷 3d6（范围 8~18）"""
+    return {k: random.randint(8, 18) for k in STAT_KEYS}
 
 # ────────── Prompt 模板 ──────────
 WORLD_PROMPT = Template("""
 你是高自由度 RPG 的世界生成器，玩家关键词：{{ keywords }}。
-请严格以 JSON 返回：
+
+请严格输出 JSON：
 {
   "summary": "...(≤200 字世界观)...",
-  "main_plot": "...(一句话主线目标，例如“揭开灵石真相”)...",
+  "main_plot": "...(一句话主线目标)...",
   "characters": {
-    "MAIN": { "name":"...", "role":"主角", "traits":["..."] },
-    "NPC1": { "name":"...", "role":"引路人", "traits":["..."] },
-    "NPC2": { "name":"...", "role":"路人甲", "traits":["..."] }
+    "MAIN": {
+      "name": "...", "role": "主角",
+      "traits": ["...","..."],
+      "backstory": "50 字经历",         // ★ 新字段
+      "goal": "个人目标",                // ★ 新字段
+      "stats": { "STR":?, "DEX":?, "CON":?, "INT":?, "WIS":?, "CHA":? }
+    },
+    "NPC1": { ... 同上 },
+    "NPC2": { ... 同上 }
   }
 }
 """.strip())
+
 
 EVENT_PROMPT = Template("""
 <世界观>{{ summary }}</世界观>
@@ -54,6 +66,8 @@ EVENT_PROMPT = Template("""
 {% endif %}
 
 请编排下一幕，**必须推动主线目标至少一点**，并提供 3 个选项。
+可参考主角属性 {{ characters.MAIN.stats }} 
+例如若玩家力量大于特定值 可给出“强行破门”选项，魅力高则给“说服”选项。
 Return strict JSON with a top-level key "options".
 严格返回 JSON：
 {
@@ -111,26 +125,48 @@ def _safe_json_parse(text: str) -> dict:
 
 
 # ────────── 生成世界观 ──────────
-def create_world(tags: List[str], lang: str = "zh") -> WorldState:
+def create_world(tags: list[str], lang="zh",
+                 need_avatar=False, avatar_style="anime") -> WorldState:
+    """生成世界 + 角色属性；need_avatar=True 时顺便生成头像"""
     resp = client.chat.completions.create(
-        model   = MODEL,
+        model=MODEL,
         messages=[
-            {"role":"system","content": STYLE_HINT + lang_hint(lang)},
-            {"role":"user","content": WORLD_PROMPT.render(keywords="、".join(tags))},
+            {"role":"system","content":STYLE_HINT + lang_hint(lang)},
+            {"role":"user","content":WORLD_PROMPT.render(keywords="、".join(tags))},
         ],
         response_format={"type":"json_object"},
-        max_tokens=600,
+        max_tokens=700,
+        temperature=0.7,
     )
-    data  = _safe_json_parse(resp.choices[0].message.content)
-    chars = {k: Character(id=str(uuid4()), **v) for k, v in data["characters"].items()}
+    data = _safe_json_parse(resp.choices[0].message.content)
+
+    # ★ 把 stats 缺失或 None 的补随机
+    def fill_stats(d: dict[str, Any]) -> dict[str, int]:
+        return {k: int(d.get(k) or random.randint(8,18)) for k in STAT_KEYS}
+
+    characters = {}
+    for code, info in data["characters"].items():
+        info["stats"] = fill_stats(info.get("stats", {}))
+        char = Character(id=str(uuid4()), **info)
+
+        # ★ 可选：生成头像
+        if need_avatar:
+            img = client.images.generate(
+                prompt=f"{avatar_style} portrait of {char.name} {char.traits[0]}",
+                size="512x512", n=1)
+            char.avatar_url = img.data[0].url
+
+        characters[code] = char
+
     return WorldState(
         genre_tags = tags,
         summary    = data["summary"],
         main_plot  = data["main_plot"],
-        characters = chars,
+        characters = characters,
         timeline   = [],
         flags      = {},
     )
+
 
 # ────────── 生成事件 ──────────
 def generate_event(world: WorldState, lang: str = "zh", retry: int = 1) -> dict:

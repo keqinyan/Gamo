@@ -20,6 +20,10 @@ body{
   max-width:var(--maxW);
   margin:40px auto;padding:0 12px;color:#222;
 }
+/* —— 人物 —— */
+.card{border:1px solid #ddd;border-radius:8px;padding:8px;margin:6px 0}
+.card h4{margin:4px 0}
+.stats span{display:inline-block;width:36px}
 
 /* —— 气泡 —— */
 .bubble{background:#f6f6f6;border-radius:8px;padding:12px;margin:8px 0;}
@@ -55,6 +59,19 @@ button:disabled{background:#aaa}
   button{width:100%;margin:6px 0;font-size:16px}
   #tagInput{width:100%;margin-bottom:8px}
   #langBox{position:static;margin-bottom:12px;box-shadow:none}
+
+@keyframes typing{ from{ width:0 } to{ width:100% } }
+.typewriter{
+  overflow:hidden;white-space:nowrap;border-right:2px solid var(--accent);
+  animation:typing 2s steps(30,end), blink .7s step-end infinite;
+}
+@keyframes blink{ 50%{border-color:transparent} }
+
+/* 简易遮罩 */
+#settingsModal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  padding:20px;background:#fff;border-radius:8px;box-shadow:0 0 10px #0004}
+.hidden{display:none}
+
 }
 </style>
 </head>
@@ -74,12 +91,41 @@ button:disabled{background:#aaa}
 <!-- 关键词 + Start -->
 <input id="tagInput" placeholder="Enter tags, e.g. isekai, comedy" style="padding:8px;width:60%">
 <button id="startBtn" onclick="start()">Start</button>
+<input id="tagInput" ...>
+<button id="randomBtn" onclick="surprise()">🎲 Surprise Me!</button>
+<button id="settingsBtn">⚙️</button>
+
 
 <!-- 运行区 -->
 <div id="loader"></div>
 <h3 id="intro"></h3>
 <div id="history"></div>
 <div id="choices"></div>
+<div id="party"></div>
+
+<!-- 隐藏的弹窗 -->
+<div id="settingsModal" class="hidden">
+  <h3>⚙️ Settings</h3>
+
+  <label>
+    <input type="checkbox" id="toggleCG" checked>
+    Enable auto CG
+  </label><br>
+
+  <label>
+    <input type="checkbox" id="toggleAvatar">
+    Generate avatars
+  </label>
+
+  <select id="avatarStyle">
+    <option value="anime">Anime</option>
+    <option value="pixel">Pixel</option>
+    <option value="real">Realistic</option>
+  </select><br>
+
+  <button onclick="closeSettings()">OK</button>
+</div>
+
 
 <button id="restartBtn" onclick="restart()">Restart</button>
 
@@ -97,6 +143,16 @@ const i18n={
   en:{start:"Start",exec:"Go",ending:"End Story",restart:"Restart",
       placeholder:"Enter tags, e.g. isekai, comedy",free:"Free action…"}
 };
+const PRESETS = [
+  "赛博忍者,鲨鱼神教", "维多利亚,蒸汽朋克,吸血鬼",
+  "猫咪王国,宇宙歌剧",  "校园恋爱,克苏鲁",  // 任意脑洞
+];
+function surprise(){
+  const kw = PRESETS[Math.floor(Math.random()*PRESETS.length)];
+  tagInput.value = kw;
+  start();                       // 直接开局
+}
+
 let lang=localStorage.getItem("lang")||"zh";
 let SID=null;
 
@@ -117,6 +173,41 @@ function add(html){
   hist.insertAdjacentHTML("beforeend",`<div class="bubble">${html}</div>`);
   window.scrollTo(0,document.body.scrollHeight);
 }
+function renderParty(chars){
+  const party = document.getElementById("party");
+  party.innerHTML = Object.values(chars).map(c=>`
+    <div class="card">
+      ${c.avatar_url ? `<img src="${c.avatar_url}" style="width:64px;border-radius:50%">` : ""}
+      <h4>${c.name} · ${c.role}</h4>
+      <div class="stats">
+        ${Object.entries(c.stats).map(([k,v])=>`<span>${k}:${v}</span>`).join("")}
+      </div>
+      <div class="back">${c.backstory}</div>
+      <div class="goal">🎯 ${c.goal}</div>
+    </div>`).join("");
+}
+function add(text){
+  hist.insertAdjacentHTML("beforeend",
+    `<div class="bubble typewriter">${text.replace(/\\n/g,'<br>')}</div>`);
+}
+/* 打开 / 关闭 */
+document.getElementById('settingsBtn').onclick=()=>modal.classList.remove('hidden');
+function closeSettings(){ modal.classList.add('hidden'); }
+
+/* 全局选项保存 */
+let CFG = {
+  need_cg   : true,
+  need_avatar:false,
+  avatar_style:"anime",
+};
+function closeSettings(){
+  CFG.need_cg      = document.getElementById('toggleCG').checked;
+  CFG.need_avatar  = document.getElementById('toggleAvatar').checked;
+  CFG.avatar_style = document.getElementById('avatarStyle').value;
+  modal.classList.add('hidden');
+}
+
+
 
 async function api(path,body){
   body={...body,lang,sid:SID};
@@ -132,12 +223,29 @@ async function api(path,body){
 /* ---------- 游戏逻辑 ---------- */
 async function start(){
   resetUI();
-  const tags=document.getElementById("tagInput").value.split(",").map(s=>s.trim()).filter(Boolean);
-  if(!tags.length){alert(t("placeholder"));return;}
-  const d=await api("new",{tags});
-  SID=d.sid;                                 // 保存 sid
-  intro.innerHTML=`🌍 ${d.summary}<br>🎯 ${d.main_plot}`;
-  add(d.event.text);renderButtons(d.event.options);
+
+  /* 1️⃣ 收集关键词 */
+  const tags = document.getElementById("tagInput").value
+                 .split(",").map(s=>s.trim()).filter(Boolean);
+  if (!tags.length){ alert(t("placeholder")); return; }
+
+  /* 2️⃣ 请求 /new 生成世界观 */
+  const data = await api("new", {                // ← 用 data 接住返回
+    tags,
+    lang        : lang,                         // 当前语言
+    need_avatar : CFG.need_avatar,              // 是否生成头像
+    avatar_style: CFG.avatar_style              // 头像风格
+  });
+
+  /* 3️⃣ 渲染角色卡片（一定放在拿到 data 后） */
+  renderParty(data.characters);
+
+  /* 4️⃣ 显示世界背景 & 首幕事件 */
+  intro.innerHTML = `🌍 ${data.summary}<br>🎯 ${data.main_plot}`;
+  add(data.event.text);
+  renderButtons(data.event.options);
+
+  SID = data.sid;                               // 保存 sid 给后续 /choice /end
 }
 
 async function choose(id){

@@ -41,6 +41,7 @@ def get_sid(req: Request, resp: Response) -> str:
 class NewGameIn(BaseModel):
     tags: list[str]
     lang: str = "zh"
+    need_avatar: bool = False
 
 class ChoiceIn(BaseModel):
     sid: str
@@ -65,18 +66,26 @@ def new_game(
 ):
     sid = get_sid(req, resp)
 
-    ws  = create_world(body.tags, body.lang)
+    ws  = create_world(
+            tags        = body.tags,
+            lang        = body.lang,
+            need_avatar = body.need_avatar
+         )
     evt = generate_event(ws, body.lang)
 
+    # 3) 把首幕文本 / 选项写进 flags，放入 SESSION
     ws.flags["current_event_text"] = evt["text"]
     ws.flags["last_options"]       = evt["options"]
     SESSIONS[sid] = ws
 
+    # 4) 返回前端需要的全部信息
     return {
-        "sid": sid,   
-        "summary"   : ws.summary,
-        "main_plot" : ws.main_plot,
-        "event"     : evt,
+        "sid"      : sid,                         # ⚑ 前端保存，用于后续 /choice /end
+        "summary"  : ws.summary,
+        "main_plot": ws.main_plot,
+        "characters": {k: v.model_dump()          # 角色卡：属性 / 背景 / 头像
+                       for k, v in ws.characters.items()},
+        "event"    : evt
     }
 
 @app.post("/choice")
