@@ -3,56 +3,58 @@
 <head>
 <meta charset="utf-8"/>
 <title>Gamo RPG</title>
+
 <style>
-body      {font-family:sans-serif;max-width:620px;margin:40px auto;padding:0 12px;color:#222}
-.bubble   {background:#f6f6f6;border-radius:8px;padding:12px;margin:8px 0}
-button    {margin:6px 6px 0 0;padding:6px 14px;border:0;border-radius:6px;
-           background:#2563eb;color:#fff;font-size:14px;cursor:pointer}
+/* ——— 布局 & 主题 ——— */
+body{font-family:sans-serif;max-width:620px;margin:40px auto;padding:0 12px;color:#222}
+h2{margin-top:0}
+.bubble{background:#f6f6f6;border-radius:8px;padding:12px;margin:8px 0}
+button{margin:6px 6px 0 0;padding:6px 14px;border:0;border-radius:6px;
+       background:#2563eb;color:#fff;font-size:14px;cursor:pointer}
 button:disabled{background:#aaa}
-/* ─── Spinner 固定居中 ───────────────────────────────── */
+
+/* ——— Spinner 固定屏中 ——— */
 #loader{
   display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #2563eb;border-radius:50%;
-  animation:spin 1s linear infinite;z-index:9999;
+  width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #2563eb;
+  border-radius:50%;animation:spin 1s linear infinite;z-index:9999;
 }
 @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+
+/* ——— 语言选择悬浮 ——— */
 #langBox{
-  position:fixed;
-  top:12px;
-  right:12px;
-  z-index:1000;
-  background:#fff;        /* 可选：白底防挡住文字 */
-  padding:4px 6px;
-  border-radius:6px;
-  box-shadow:0 0 4px rgba(0,0,0,.08);
+  position:fixed;top:12px;right:12px;z-index:1000;
+  background:#fff;padding:4px 6px;border-radius:6px;
+  box-shadow:0 0 4px rgba(0,0,0,.08);font-size:14px;
 }
-#langBox select{
-  margin-left:4px;
-}
+#langBox select{margin-left:4px}
 </style>
 </head>
 
 <body onload="resetUI()">
 <h2>🌟 Gamo RPG Demo</h2>
+
+<!-- 语言选择 -->
 <div id="langBox">
-<label id="langLabel" for="langSel" style="margin-right:6px">Language:</label>
-<select onchange="switchLang(this.value)">
-  <option value="zh">中文</option>
-  <option value="en">English</option>
-</select>
+  <label id="langLabel" for="langSel">语言:</label>
+  <select id="langSel" onchange="switchLang(this.value)">
+    <option value="zh">中文</option>
+    <option value="en">English</option>
+  </select>
 </div>
 
-<input id="tagInput" placeholder="输入关键词，用逗号分隔，例如“穿越,搞笑”" style="padding:6px;width:60%">
+<!-- 关键词输入 & 开始 -->
+<input id="tagInput" style="padding:6px;width:60%" placeholder="输入关键词，用逗号分隔，例如“穿越,搞笑”">
 <button id="startBtn" onclick="start()">开始冒险</button>
 
 <div id="loader"></div>
-<h3 id="intro"></h3>        <!-- 世界观/主线展示区 -->
-<div id="history"></div>
-<div id="choices"></div>
+<h3 id="intro"></h3>      <!-- 🌍 世界观 + 🎯 主线 -->
+<div id="history"></div> <!-- 剧情气泡 -->
+<div id="choices"></div> <!-- 按钮区 -->
 <button id="restartBtn" onclick="restart()" style="margin-top:12px">重新开始</button>
 
 <script>
-/* ─── 全局变量 ───────────────────────────────────────────── */
+/* ——— 全局常量 / 状态 ——— */
 const API  = "https://gamo.onrender.com";
 const hist = document.getElementById("history");
 const box  = document.getElementById("choices");
@@ -63,128 +65,108 @@ const i18n = {
   zh:{ start:"开始冒险", exec:"执行", ending:"生成结局", restart:"重新开始",
        placeholder:"输入关键词，用逗号分隔，例如“穿越,搞笑”", free:"自由输入…"},
   en:{ start:"Start",     exec:"Go",   ending:"End Story", restart:"Restart",
-       placeholder:"Enter tags, e.g. isekai, comedy",     free:"Free action…"}
+       placeholder:"Enter tags, e.g. isekai, comedy",      free:"Free action…"}
 };
 let lang = localStorage.getItem("lang") || "zh";
 
-/* ─── 工具函数 ────────────────────────────────────────────── */
-function t(k){return i18n[lang][k]||k;}
-function showLoader(){loader.style.display="block";}
-function hideLoader(){loader.style.display="none";}
-function restart(){ location.reload(); }
+/* ——— 工具函数 ——— */
+const t         = k => i18n[lang][k] || k;
+const showLoad  = () => loader.style.display="block";
+const hideLoad  = () => loader.style.display="none";
+const restart   = () => location.reload();
 
 function switchLang(l){
-  lang=l;localStorage.setItem("lang",l);
+  lang = l; localStorage.setItem("lang", l);
   document.getElementById("startBtn").textContent = t("start");
   document.getElementById("restartBtn").textContent = t("restart");
-  document.getElementById("tagInput").placeholder   = t("placeholder");
-  document.getElementById("langLabel").textContent  = (l==="zh")?"语言:":"Language:";
-  // choices 区里的按钮在 renderButtons 时会根据 t() 更新
+  document.getElementById("tagInput").placeholder  = t("placeholder");
+  document.getElementById("langLabel").textContent = (l==="zh")?"语言:":"Language:";
 }
 
-function resetUI(){
-  intro.innerHTML="";
-  hist.innerHTML="";
-  box.innerHTML="";
-}
+function resetUI(){ intro.innerHTML=hist.innerHTML=box.innerHTML=""; }
 
 function add(html){
-  hist.insertAdjacentHTML("beforeend",`<div class="bubble">${html}</div>`);
-  window.scrollTo(0,document.body.scrollHeight);
+  hist.insertAdjacentHTML("beforeend", `<div class="bubble">${html}</div>`);
+  window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});
 }
 
-/* ─── 调后端 API（自动携带 lang & cookie） ──────────────── */
+/* ——— 通用 fetch (自动附带 lang & cookie) ——— */
 async function api(path, body){
   body = {...body, lang};
-  showLoader();
+  showLoad();
   const res = await fetch(`${API}/${path}`,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(body),
-    credentials:"include"
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body),credentials:"include"
   });
-  hideLoader();
+  hideLoad();
   if(!res.ok){ alert(await res.text()); throw new Error("api error"); }
   return res.json();
 }
 
-/* ─── 渲染按钮 + 自由输入 + 结局 ────────────────────────── */
+/* ——— 渲染选项 / 自由输入 / 结局按钮 ——— */
 function renderButtons(opts){
   box.innerHTML = "";
 
-  /* A/B/C */
+  /* A/B/C 选项 */
   opts.forEach(o=>{
-    const b=document.createElement("button");
-    b.textContent=`${o.id}. ${o.text}`;
-    b.onclick=()=>choose(o.id);
-    b.style = "margin:4px;padding:6px 12px;background:#2563eb;color:#fff;border:0;border-radius:6px;cursor:pointer";
+    const b = document.createElement("button");
+    b.textContent = `${o.id}. ${o.text}`;
+    b.onclick     = ()=>choose(o.id);
     box.appendChild(b);
   });
 
-  if(opts.length){
-    /* 自由输入 */
-    const inp=document.createElement("input");
-    inp.id="customInput";inp.placeholder=t("free");
-    box.appendChild(inp);
+  if(!opts.length) return;           // 首次加载失败 safety
 
-    const exec=document.createElement("button");
-    exec.id="execBtn";exec.textContent=t("exec");
-    exec.onclick=customAct;
-    exec.style = "margin:4px;padding:6px 12px;background:#16a34a;color:#fff;border:0;border-radius:6px;cursor:pointer";
-    box.appendChild(exec);
+  /* 自由输入 + 执行 */
+  const inp = document.createElement("input");
+  inp.id="customInput"; inp.placeholder=t("free"); box.appendChild(inp);
 
-    inp.addEventListener("keydown",e=>e.key==="Enter"&&customAct());
+  const exec = document.createElement("button");
+  exec.id="execBtn"; exec.textContent=t("exec");
+  exec.onclick=customAct; exec.style.background="#16a34a"; box.appendChild(exec);
+  inp.addEventListener("keydown",e=>e.key==="Enter"&&customAct());
 
-    /* 结局按钮 */
-    const end=document.createElement("button");
-    end.id="endBtn";end.textContent=t("ending");
-    end.onclick=endGame;
-    end.style.background="#dc2626";
-    box.appendChild(end);
-  }
+  /* 结局生成 */
+  const end = document.createElement("button");
+  end.id="endBtn"; end.textContent=t("ending");
+  end.onclick=endGame; end.style.background="#dc2626"; box.appendChild(end);
 }
 
 function disable(){ box.querySelectorAll("button").forEach(b=>b.disabled=true); }
 
-/* ─── 前端逻辑 ───────────────────────────────────────────── */
+/* ——— 前端主流程 ——— */
 async function start(){
   resetUI();
   const tags = document.getElementById("tagInput").value
                .split(",").map(s=>s.trim()).filter(Boolean);
   if(!tags.length){ alert(t("placeholder")); return; }
 
-  const data = await api("new",{tags});
-  intro.innerHTML = `🌍 ${data.summary}<br>🎯 ${data.main_plot}`;
-  add(data.event.text);
-  renderButtons(data.event.options);
+  const d = await api("new",{tags});
+  intro.innerHTML = `🌍 ${d.summary}<br>🎯 ${d.main_plot}`;
+  add(d.event.text);
+  renderButtons(d.event.options);
 }
 
 async function choose(id){
   disable();
   const d = await api("choice",{choice_id:id});
-  add(d.result);
-  add(d.event.text);
-  renderButtons(d.event.options);
+  add(d.result); add(d.event.text); renderButtons(d.event.options);
 }
 
 async function customAct(){
   const inp=document.getElementById("customInput");
-  const txt=inp.value.trim();
-  if(!txt) return;
-  inp.value="";
+  const txt=inp.value.trim(); if(!txt) return; inp.value="";
   const d = await api("choice",{custom_input:txt});
-  add(d.result);add(d.event.text);
-  renderButtons(d.event.options);
+  add(d.result); add(d.event.text); renderButtons(d.event.options);
 }
 
 async function endGame(){
-  disable();showLoader();
-  const d = await api("end",{});
-  hideLoader();box.innerHTML="";
-  add(`<b>=== ${d.title} ===</b>`);add(d.ending);
+  disable(); showLoad();
+  const d = await api("end",{}); hideLoad(); box.innerHTML="";
+  add(`<b>=== ${d.title} ===</b>`); add(d.ending);
 }
 
-/* ─── 自动初始化当前语言文本 ────────────────────────────── */
+/* ——— 初始化语言文本 ——— */
 switchLang(lang);
 </script>
 </body>
