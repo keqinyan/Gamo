@@ -108,17 +108,21 @@ def choose(
 
     return {"result": narration, "event": nxt_evt}
 
+
 @app.post("/end")
 def end_game(
-    req : Request,
+    req: Request,
     resp: Response,
-    lang: str = Body("zh"),            # 仅需要 lang
+    payload: dict | None = Body(None)   # ← 允许 JSON，也可为空
 ):
+    lang = payload.get("lang", "zh") if payload else "zh"
+
     sid = get_sid(req, resp)
     ws  = SESSIONS.get(sid)
-    if ws is None:
+    if not ws:
         raise HTTPException(400, "没有进行中的游戏")
 
     ending = generate_ending(ws, lang)
-    SESSIONS.pop(sid, None)            # 清理存档
+    SESSIONS.pop(sid, None)             # 清理存档
+
     return ending
