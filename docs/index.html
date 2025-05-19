@@ -15,7 +15,31 @@ button:disabled{background:#aaa}
 @keyframes spin{from{transform:translate(-50%,-50%) rotate(0)}to{transform:translate(-50%,-50%) rotate(360deg)}}
 #langBox{position:fixed;top:12px;right:12px;z-index:1000;background:#fff;padding:4px 6px;border-radius:6px;box-shadow:0 0 4px #0002}
 #langBox select{margin-left:4px;padding:4px}
-@media(max-width:480px){body{margin:20px 8px;font-size:16px}button{width:100%;margin:6px 0;font-size:16px}#tagInput{width:100%;margin-bottom:8px}#langBox{position:static;margin-bottom:12px;box-shadow:none}}
+#tagInput{width:360px;padding:8px}
+@media(max-width:480px){
+  #tagInput{width:100%;margin-bottom:8px}
+}
+
+.stats{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:4px;
+}
+.stats span{
+  padding:2px 4px;
+  background:#f6f6f6;
+  border-radius:4px;
+  text-align:center;
+  }
+.stats span{position:relative;cursor:help}
+.stats span::after{
+  content:attr(data-full);
+  position:absolute;left:50%;top:-22px;transform:translateX(-50%);
+  background:#333;color:#fff;font-size:12px;padding:2px 4px;border-radius:4px;
+  white-space:nowrap;display:none;
+  }
+.stats span:hover::after{display:block}
+
 </style>
 </head>
 <body>

@@ -16,6 +16,7 @@ const historyEl = document.getElementById("history");
 const choicesEl = document.getElementById("choices");
 const partyEl   = document.getElementById("party");
 
+
 /* ---------- i18n ---------- */
 const I18N = {
   zh:{start:"开始冒险",restart:"重新开始",placeholder:"输入关键词，用逗号分隔",free:"自由输入…",exec:"执行",ending:"生成结局"},
@@ -54,15 +55,31 @@ async function api(path, body){
 
 /* ---------- 渲染角色卡 ---------- */
 function renderParty(chars){
-  partyEl.innerHTML = Object.values(chars).map(c=>`
+  const LONG = {                       // ← 英文/缩写 ↔ 全称（自行修改多语言）
+    STR:"力量 Strength", DEX:"敏捷 Dexterity", CON:"体质 Constitution",
+    INT:"智力 Intelligence", WIS:"感知 Wisdom", CHA:"魅力 Charisma"
+  };
+
+  const party = document.getElementById("party");
+  party.innerHTML = Object.values(chars).filter(c=>c.id).map(c=>`
     <div class="card">
-      ${c.avatar_url?`<img src="${c.avatar_url}" style="width:64px;border-radius:50%">`:""}
+      ${c.avatar_url ? `<img src="${c.avatar_url}" class="ava">` : ""}
       <h4>${c.name} · ${c.role}</h4>
-      <div class="stats">${Object.entries(c.stats).map(([k,v])=>`<span>${k}:${v}</span>`).join("")}</div>
-      <div>${c.backstory}</div>
-      <div>🎯 ${c.goal}</div>
-    </div>`).join("");
+
+      <!-- ▼ 这里是改动重点 ▼ -->
+      <div class="stats">
+        ${Object.entries(c.stats).map(
+            ([k,v]) => `<span data-full="${LONG[k]||k}">${k}:${v}</span>`
+        ).join("")}
+      </div>
+      <!-- ▲ 改动结束 ▲ -->
+
+      <p>${c.backstory}</p>
+      <p>🎯 ${c.goal}</p>
+    </div>
+  `).join("");
 }
+
 
 /* ---------- 按钮区 ---------- */
 function renderButtons(opts){
