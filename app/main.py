@@ -135,7 +135,9 @@ def choose(
 @app.post("/end")
 def end_game(req: Request, resp: Response, body: dict = Body(None)):
     lang = body.get("lang", "zh") if body else "zh"
-    sid  = get_sid(req, resp, create=False)
+    sid  = body.get("sid") if body else None
+    if not sid:
+        sid = get_sid(req, resp, create=False) # 兜到 cookie
     ws   = SESSIONS.get(sid)
     if not ws:
         raise HTTPException(400, "没有进行中的游戏")
