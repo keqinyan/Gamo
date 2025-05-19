@@ -86,6 +86,8 @@ button:disabled{background:#aaa}
     <option value="zh">中文</option>
     <option value="en">English</option>
   </select>
+  <label><input type="checkbox" id="toggleCG" checked> CG</label>
+  <label><input type="checkbox" id="toggleAvatar"> Avatar</label>
 </div>
 
 <!-- 关键词 + Start -->
@@ -93,7 +95,6 @@ button:disabled{background:#aaa}
 <button id="startBtn" onclick="start()">Start</button>
 <input id="tagInput" ...>
 <button id="randomBtn" onclick="surprise()">🎲 Surprise Me!</button>
-<button id="settingsBtn">⚙️</button>
 
 
 <!-- 运行区 -->
@@ -102,31 +103,6 @@ button:disabled{background:#aaa}
 <div id="history"></div>
 <div id="choices"></div>
 <div id="party"></div>
-
-<!-- 隐藏的弹窗 -->
-<div id="settingsModal" class="hidden">
-  <h3>⚙️ Settings</h3>
-
-  <label>
-    <input type="checkbox" id="toggleCG" checked>
-    Enable auto CG
-  </label><br>
-
-  <label>
-    <input type="checkbox" id="toggleAvatar">
-    Generate avatars
-  </label>
-
-  <select id="avatarStyle">
-    <option value="anime">Anime</option>
-    <option value="pixel">Pixel</option>
-    <option value="real">Realistic</option>
-  </select><br>
-
-  <button onclick="closeSettings()">OK</button>
-</div>
-
-
 <button id="restartBtn" onclick="restart()">Restart</button>
 
 <script>
