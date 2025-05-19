@@ -131,9 +131,12 @@ async function endGame(){
   addHTML(`<b>=== ${d.title} ===</b>`); addHTML(d.ending);
 }
 
-/* ---------- 随机世界 ---------- */
-const PRESETS=["赛博忍者,鲨鱼神教","维多利亚,蒸汽朋克,吸血鬼","猫咪王国,宇宙歌剧","校园恋爱,克苏鲁"];
-function surprise(){ tagInput.value=PRESETS[Math.floor(Math.random()*PRESETS.length)]; start(); }
+async function surprise(){
+  const { tags } = await api("surprise", { lang });   // 把当前 lang 传过去
+  tagInput.value = tags;
+  start();                                            // 直接开局
+}
+
 
 /* ---------- 事件绑定 ---------- */
 startBtn.onclick=start; randomBtn.onclick=surprise; restartBtn.onclick=()=>location.reload();

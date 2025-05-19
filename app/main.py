@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Body, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
+from openai import OpenAI
 
 from .models import WorldState
 from .generator import create_world, generate_event, apply_choice, generate_ending
@@ -145,3 +146,22 @@ def end_game(req: Request, resp: Response, body: dict = Body(None)):
     ending = generate_ending(ws, lang)
     SESSIONS.pop(sid, None)
     return ending
+
+SURPRISE_PROMPTS = {
+    "zh": "请给我 2-4 个极具想象力的中文 RPG 题材关键词，逗号分隔，每个 ≤4 字，不要解释。",
+    "en": "Give me 2-4 imaginative English genre tags for a high-freedom RPG, \
+           separated by commas, each tag ≤2 words. No explanation.",
+}
+
+@app.post("/surprise")
+def surprise(body: dict = Body(None)):
+    lang = (body or {}).get("lang", "zh")
+    prompt = SURPRISE_PROMPTS.get(lang, SURPRISE_PROMPTS["en"])
+
+    rsp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role":"user","content":prompt}],
+        max_tokens=30, temperature=1.1,
+    )
+    tags = rsp.choices[0].message.content.strip(" ,\n")
+    return {"tags": tags}
