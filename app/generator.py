@@ -153,12 +153,12 @@ def generate_event(world: WorldState, lang: str = "zh", retry: int = 1) -> dict:
 
     for attempt in range(2):
         try:
-            raw = _safe_json_parse(rsp.choices[0].message.content)
+            raw = _safe_json_parse(resp.choices[0].message.content)
             break
         except json.JSONDecodeError:
             if attempt == 0:
                 # 再给 GPT 一次机会，提示 ONLY JSON
-                rsp = client.chat.completions.create(
+                resp = client.chat.completions.create(
                     model=MODEL,
                     messages=[
                         {"role":"system","content":STYLE_HINT + lang_hint(lang)},
@@ -195,7 +195,7 @@ def apply_choice(
             'Return strict JSON: {"narration":"...","impact":(-1|0|1)}'
         )
 
-        rsp  = client.chat.completions.create(
+        resp  = client.chat.completions.create(
             model = MODEL,
             messages=[
                 {"role":"system","content":STYLE_HINT + lang_hint(lang)},
@@ -205,7 +205,7 @@ def apply_choice(
             max_tokens=120,
             temperature=0.7,
         )
-        data        = _safe_json_parse(rsp.choices[0].message.content)
+        data        = _safe_json_parse(resp.choices[0].message.content)
         instant_fb  = data.get("narration","")
         impact      = data.get("impact",0)
         choice_txt  = custom_input
