@@ -5,6 +5,7 @@ from openai import OpenAI
 
 from .models import WorldState
 from .generator import create_world, generate_event, apply_choice, generate_ending
+client = OpenAI()          # ← 新增
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
