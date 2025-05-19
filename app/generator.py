@@ -1,35 +1,35 @@
 """
-app/generator.py  ·  连续剧情 + 主线目标 + zh/en 多语言
+连续剧情 + 主线目标 + zh/en + 属性点 + 可选头像
 """
 from __future__ import annotations
-import os, json, re, time
+import json, os, re, time, random
 from uuid import uuid4
-from typing import List, Dict, Tuple, Any
+from typing import Any, List, Dict
 
 from jinja2 import Template
 from openai import OpenAI
 from .models import WorldState, Character
-import random                           # ★ 新增
-STAT_KEYS = ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
-# ────────── 通用配置 ──────────
-MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+
+MODEL      = os.getenv("LLM_MODEL", "gpt-4o-mini")
 STYLE_HINT = (
     "作品风格充满脑洞与幽默、惊悚与反转，但不失深度；"
     "请用第二人称，尽可能让玩家身临其境，参与感拉满。"
 )
-
 client = OpenAI()
 
-# ✅ 语言 → 追加提示
-LANG_HINT = {
-    "zh": "用简体中文。",
-    "en": "Write in vivid English.",
-}
-def lang_hint(lang: str) -> str:
-    return LANG_HINT.get(lang, LANG_HINT["zh"])
+# 语言附加提示
+LANG_HINT = {"zh":"用简体中文。","en":"Write in vivid English."}
+
+def lang_hint(l:str)->str: return LANG_HINT.get(l, LANG_HINT["zh"])
+
+# ---------- 属性点 ----------
+STAT_KEYS = ["STR","DEX","CON","INT","WIS","CHA"]
+
 def roll_stats():
-    """6 维属性各掷 3d6（范围 8~18）"""
-    return {k: random.randint(8, 18) for k in STAT_KEYS}
+    return {k: random.randint(8,18) for k in STAT_KEYS}
+
+def fill_stats(d:dict[str,Any]):
+    return {k: int(d.get(k) or random.randint(8,18)) for k in STAT_KEYS}
 
 # ────────── Prompt 模板 ──────────
 WORLD_PROMPT = Template("""
@@ -125,92 +125,60 @@ def _safe_json_parse(text: str) -> dict:
 
 
 # ────────── 生成世界观 ──────────
-def create_world(tags: list[str], lang="zh",
-                 need_avatar=False, avatar_style="anime") -> WorldState:
-    """生成世界 + 角色属性；need_avatar=True 时顺便生成头像"""
-    resp = client.chat.completions.create(
+def create_world(tags:List[str], lang="zh", *, need_avatar=False, avatar_style="anime")->WorldState:
+    rsp = client.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role":"system","content":STYLE_HINT + lang_hint(lang)},
+            {"role":"system","content":STYLE_HINT+lang_hint(lang)},
             {"role":"user","content":WORLD_PROMPT.render(keywords="、".join(tags))},
         ],
         response_format={"type":"json_object"},
-        max_tokens=700,
-        temperature=0.7,
+        max_tokens=700, temperature=0.7,
     )
-    data = _safe_json_parse(resp.choices[0].message.content)
+    data = _safe_json_parse(rsp.choices[0].message.content)
 
-    # ★ 把 stats 缺失或 None 的补随机
-    def fill_stats(d: dict[str, Any]) -> dict[str, int]:
-        return {k: int(d.get(k) or random.randint(8,18)) for k in STAT_KEYS}
-
-    characters = {}
+    characters: Dict[str, Character] = {}
     for code, info in data["characters"].items():
         info["stats"] = fill_stats(info.get("stats", {}))
         char = Character(id=str(uuid4()), **info)
-
-        # ★ 可选：生成头像
+        
         if need_avatar:
             img = client.images.generate(
                 prompt=f"{avatar_style} portrait of {char.name} {char.traits[0]}",
                 size="512x512", n=1)
             char.avatar_url = img.data[0].url
-
         characters[code] = char
 
     return WorldState(
-        genre_tags = tags,
-        summary    = data["summary"],
-        main_plot  = data["main_plot"],
-        characters = characters,
-        timeline   = [],
-        flags      = {},
+        genre_tags=tags,
+        summary   =data["summary"],
+        main_plot =data["main_plot"],
+        characters=characters,
+        timeline  =[],
+        flags     ={},
     )
 
+# ---------- 事件 ----------
 
-# ────────── 生成事件 ──────────
-def generate_event(world: WorldState, lang: str = "zh", retry: int = 1) -> dict:
+def generate_event(world:WorldState, lang="zh", retry=1)->dict:
     prompt = EVENT_PROMPT.render(
-        summary     = world.summary,
-        main_plot   = world.main_plot,
-        last_event  = world.flags.get("current_event_text", ""),
-        last_choice = world.flags.get("last_choice_text", ""),
+        summary=world.summary, main_plot=world.main_plot,
+        last_event=world.flags.get("current_event_text",""),
+        last_choice=world.flags.get("last_choice_text",""),
+        characters=world.characters,                       # ★ 传 characters
     )
-    resp = client.chat.completions.create(
-        model = MODEL,
+    rsp = client.chat.completions.create(
+        model=MODEL,
         messages=[
-            {"role": "system", "content": STYLE_HINT + lang_hint(lang)},
-            {"role": "user",   "content": prompt},
+            {"role":"system","content":STYLE_HINT+lang_hint(lang)},
+            {"role":"user","content":prompt},
         ],
-        response_format={"type": "json_object"},
-        max_tokens=500,
-        temperature=0.7,
+        response_format={"type":"json_object"},
+        max_tokens=500, temperature=0.7,
     )
-
-    for attempt in range(2):
-        try:
-            raw = _safe_json_parse(resp.choices[0].message.content)
-            break
-        except json.JSONDecodeError:
-            if attempt == 0:
-                # 再给 GPT 一次机会，提示 ONLY JSON
-                resp = client.chat.completions.create(
-                    model=MODEL,
-                    messages=[
-                        {"role":"system","content":STYLE_HINT + lang_hint(lang)},
-                        {"role":"user","content": prompt + "\n\n⚠️Only JSON!"},
-                    ],
-                    response_format={"type":"json_object"},
-                    max_tokens=120,
-                    temperature=0.7,
-                )
-            else:
-                raise
-
-    # ★★★—— 兜底：把 choices / Options 映射到 options ——★★★
+    raw = _safe_json_parse(rsp.choices[0].message.content)
     if "options" not in raw:
-        raw["options"] = raw.get("choices") or raw.get("Choices") or raw.get("Options") or []
-
+        raw["options"] = raw.get("choices", [])
     return raw
 
 

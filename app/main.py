@@ -1,63 +1,65 @@
-from uuid import uuid4
-from typing import Dict
-
 from fastapi import FastAPI, Body, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from uuid import uuid4
 
-from .models     import WorldState
-from .generator  import (
-    create_world, generate_event, apply_choice, generate_ending,
-)
+from .models import WorldState
+from .generator import create_world, generate_event, apply_choice, generate_ending
 
-# ────────── FastAPI & CORS ──────────
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins     = ["https://keqinyan.github.io"],  # 前端域名
-    allow_credentials = True,
-    allow_methods     = ["*"],
-    allow_headers     = ["*"],
+    allow_origins=["https://keqinyan.github.io"],  # 你的前端域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# ────────── 内存存档 ──────────
-SESSIONS: Dict[str, WorldState] = {}
+@app.get("/")
+def health():
+    return {"ok": True}
 
-def get_sid(req: Request, resp: Response) -> str:
+SESSIONS: dict[str, WorldState] = {}
+
+# ─────────────────────────────────────────────
+# cookie 助手
+# ─────────────────────────────────────────────
+from typing import Optional
+
+def get_sid(req: Request, resp: Response, *, create: bool = True) -> Optional[str]:
     sid = req.cookies.get("sid")
-    if not sid:
-        sid = uuid4().hex
-        resp.set_cookie(
-            "sid", sid,
-            max_age  = 60*60*24*30,
-            path     = "/",
-            samesite = "none",
-            secure   = True,            # 线上 https
-        )
+    if sid or not create:
+        return sid
+
+    sid = uuid4().hex
+    resp.set_cookie(
+        "sid", sid,
+        max_age=60*60*24*30,
+        path="/",
+        samesite="none", secure=True,
+    )
     return sid
 
-# ────────── 请求体模型 ──────────
+# ─────────────────────────────────────────────
+# Pydantic bodies
+# ─────────────────────────────────────────────
+from pydantic import BaseModel
+
 class NewGameIn(BaseModel):
     tags: list[str]
     lang: str = "zh"
     need_avatar: bool = False
+    avatar_style: str = "anime"
 
 class ChoiceIn(BaseModel):
-    sid: str
     choice_id: str | None = None
     custom_input: str | None = None
     lang: str = "zh"
+    sid : str | None = None   # 前端会回传，兜底
 
-class EndIn(BaseModel):
-    sid: str
-    lang: str = "zh"
-
-# ────────── 路由 ──────────
-@app.get("/")
-def root():
-    return {"status": "ok"}
-
+# ─────────────────────────────────────────────
+# /new
+# ─────────────────────────────────────────────
 @app.post("/new")
 def new_game(
     req : Request,
@@ -67,77 +69,77 @@ def new_game(
     sid = get_sid(req, resp)
 
     ws  = create_world(
-            tags        = body.tags,
-            lang        = body.lang,
-            need_avatar = body.need_avatar
-         )
+        body.tags,
+        lang          = body.lang,
+        need_avatar   = body.need_avatar,
+        avatar_style  = body.avatar_style,
+    )
     evt = generate_event(ws, body.lang)
 
-    # 3) 把首幕文本 / 选项写进 flags，放入 SESSION
-    ws.flags["current_event_text"] = evt["text"]
-    ws.flags["last_options"]       = evt["options"]
+    ws.flags.update({
+        "current_event_text": evt["text"],
+        "last_options"      : evt["options"],
+    })
     SESSIONS[sid] = ws
 
-    # 4) 返回前端需要的全部信息
     return {
-        "sid"      : sid,                         # ⚑ 前端保存，用于后续 /choice /end
+        "sid"      : sid,
         "summary"  : ws.summary,
         "main_plot": ws.main_plot,
-        "characters": {k: v.model_dump()          # 角色卡：属性 / 背景 / 头像
-                       for k, v in ws.characters.items()},
-        "event"    : evt
+        "characters": {k: c.model_dump() for k, c in ws.characters.items()},
+        "event"    : evt,
     }
 
+# ─────────────────────────────────────────────
+# /choice
+# ─────────────────────────────────────────────
 @app.post("/choice")
 def choose(
     req : Request,
     resp: Response,
     body: ChoiceIn = Body(...),
 ):
-    sid = body.sid
+    sid = body.sid or get_sid(req, resp, create=False)
     if not sid or sid not in SESSIONS:
-        raise HTTPException(400, "请先开局")
-    ws  = SESSIONS.get(sid)
-    if ws is None:
-        raise HTTPException(400, "请先开局")
+        raise HTTPException(400, "请先 /new 开局")
 
-    # 判定按钮 / 自定义
+    ws = SESSIONS[sid]
+
     if body.custom_input:
         use_choice_id = None
-        options       = []                      # 用不到
+        options       = []
     else:
         use_choice_id = body.choice_id
         options       = ws.flags.get("last_options", [])
 
-    # 结算 & 生成下一幕
-    new_ws, narration = apply_choice(
+    ws, narration = apply_choice(
         ws,
-        choice_id   = use_choice_id,
-        options     = options,
-        custom_input= body.custom_input,
-        lang        = body.lang,
+        choice_id    = use_choice_id,
+        options      = options,
+        custom_input = body.custom_input,
+        lang         = body.lang,
     )
-    nxt_evt = generate_event(new_ws, body.lang)
 
-    new_ws.flags["current_event_text"] = nxt_evt["text"]
-    new_ws.flags["last_options"]       = nxt_evt["options"]
-    SESSIONS[sid] = new_ws             # 更新存档
+    nxt = generate_event(ws, body.lang)
+    ws.flags.update({
+        "current_event_text": nxt["text"],
+        "last_options"      : nxt["options"],
+    })
+    SESSIONS[sid] = ws
 
-    return {"result": narration, "event": nxt_evt}
+    return {"result": narration, "event": nxt}
 
-
+# ─────────────────────────────────────────────
+# /end
+# ─────────────────────────────────────────────
 @app.post("/end")
-def end_game(
-    req: Request,
-    resp: Response,
-    body: EndIn = Body(...)):
-    sid  = body.sid
-    lang = body.lang
-
-    ws = SESSIONS.get(sid)
-    if ws is None:
+def end_game(req: Request, resp: Response, body: dict = Body(None)):
+    lang = body.get("lang", "zh") if body else "zh"
+    sid  = get_sid(req, resp, create=False)
+    ws   = SESSIONS.get(sid)
+    if not ws:
         raise HTTPException(400, "没有进行中的游戏")
 
     ending = generate_ending(ws, lang)
-    SESSIONS.pop(sid, None)      # 清存档
+    SESSIONS.pop(sid, None)
     return ending
