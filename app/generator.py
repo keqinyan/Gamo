@@ -192,7 +192,7 @@ def apply_choice(
         prompt = (
             "Player action (between triple quotes):\n"
             f'"""{custom_input}"""\n\n'
-            'Return strict JSON: {"narration":"(one line describing the choice)","impact":(-1|0|1)}'
+            'Return strict JSON: {"narration":"(one line summarizing the choice)","impact":(-1|0|1)}'
         )
 
         resp  = client.chat.completions.create(
