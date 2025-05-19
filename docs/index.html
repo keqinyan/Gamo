@@ -77,6 +77,7 @@ const restart   = () => location.reload();
 
 function switchLang(l){
   lang = l; localStorage.setItem("lang", l);
+  document.getElementById("langSel").value = l;
   document.getElementById("startBtn").textContent = t("start");
   document.getElementById("restartBtn").textContent = t("restart");
   document.getElementById("tagInput").placeholder  = t("placeholder");
