@@ -82,14 +82,18 @@ ENDING_PROMPT = Template("""
 """.strip())
 
 # ────────── 通用解析器 ──────────
-def _safe_json_parse(txt: str) -> dict:
+def _safe_json_parse(text: str) -> dict:
+    """尽量从 LLM 输出里扣出 JSON 对象"""
+    # 去掉 ```json\n ... \n``` 包裹
+    cleaned = re.sub(r"```json|```", "", text, flags=re.I).strip()
     try:
-        return json.loads(txt)
+        return json.loads(cleaned)
     except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", txt, re.S)
+        m = re.search(r"\{.*\}", cleaned, re.S)
         if m:
             return json.loads(m.group())
         raise
+
 
 # ────────── 生成世界观 ──────────
 def create_world(tags: List[str], lang: str = "zh") -> WorldState:
@@ -159,9 +163,11 @@ def apply_choice(
     # ① 生成「即时反馈」+ impact ---------------------------------
     if custom_input:                                  # 自由输入
         prompt = (
-            f"Player action: {custom_input}\n"
+            "Player action (between triple quotes):\n"
+            f'"""{custom_input}"""\n\n'
             'Return strict JSON: {"narration":"...","impact":(-1|0|1)}'
         )
+
         rsp  = client.chat.completions.create(
             model = MODEL,
             messages=[
