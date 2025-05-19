@@ -48,6 +48,10 @@ class ChoiceIn(BaseModel):
     custom_input: str | None = None
     lang: str = "zh"
 
+class EndIn(BaseModel):
+    sid: str
+    lang: str = "zh"
+
 # ────────── 路由 ──────────
 @app.get("/")
 def root():
@@ -117,16 +121,14 @@ def choose(
 def end_game(
     req: Request,
     resp: Response,
-    payload: dict | None = Body(None)   # ← 允许 JSON，也可为空
-):
-    lang = payload.get("lang", "zh") if payload else "zh"
+    body: EndIn = Body(...)):
+    sid  = body.sid
+    lang = body.lang
 
-    sid = get_sid(req, resp)
-    ws  = SESSIONS.get(sid)
-    if not ws:
+    ws = SESSIONS.get(sid)
+    if ws is None:
         raise HTTPException(400, "没有进行中的游戏")
 
     ending = generate_ending(ws, lang)
-    SESSIONS.pop(sid, None)             # 清理存档
-
+    SESSIONS.pop(sid, None)      # 清存档
     return ending
