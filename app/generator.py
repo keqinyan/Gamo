@@ -1,5 +1,5 @@
 """
-app/generator.py ― 连续剧情 + 主线目标 版
+app/generator.py  ·  连续剧情 + 主线目标 + zh/en 多语言
 """
 from __future__ import annotations
 import os, json, re, time
@@ -10,7 +10,7 @@ from jinja2 import Template
 from openai import OpenAI
 from .models import WorldState, Character
 
-# ────────── 配置 ──────────
+# ────────── 通用配置 ──────────
 MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 STYLE_HINT = (
     "作品风格充满脑洞与幽默、惊悚与反转，但不失深度；"
@@ -18,6 +18,14 @@ STYLE_HINT = (
 )
 
 client = OpenAI()
+
+# ✅ 语言 → 追加提示
+LANG_HINT = {
+    "zh": "用简体中文。",
+    "en": "Write in vivid English.",
+}
+def lang_hint(lang: str) -> str:
+    return LANG_HINT.get(lang, LANG_HINT["zh"])
 
 # ────────── Prompt 模板 ──────────
 WORLD_PROMPT = Template("""
@@ -69,153 +77,139 @@ ENDING_PROMPT = Template("""
 
 玩家最终业障值：{{ karma }}
 请写 150~200 字结局，基于业障展现善果/恶果/平淡收场。
-严格返回 JSON：
-{ "title":"...", "ending":"..." }
+严格返回 JSON：{ "title":"...", "ending":"..." }
 """.strip())
 
-# ────────── 工具函数 ──────────
-def _safe_json_parse(text: str) -> dict:
+# ────────── 通用解析器 ──────────
+def _safe_json_parse(txt: str) -> dict:
     try:
-        return json.loads(text)
+        return json.loads(txt)
     except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", text, re.S)
+        m = re.search(r"\{.*\}", txt, re.S)
         if m:
             return json.loads(m.group())
         raise
 
 # ────────── 生成世界观 ──────────
-def create_world(tags: List[str]) -> WorldState:
-    rsp = client.chat.completions.create(
-        model=MODEL,
+def create_world(tags: List[str], lang: str = "zh") -> WorldState:
+    resp = client.chat.completions.create(
+        model   = MODEL,
         messages=[
-            {"role":"system","content":STYLE_HINT},
-            {"role":"user","content":WORLD_PROMPT.render(keywords="、".join(tags))},
+            {"role":"system","content": STYLE_HINT + lang_hint(lang)},
+            {"role":"user","content": WORLD_PROMPT.render(keywords="、".join(tags))},
         ],
         response_format={"type":"json_object"},
         max_tokens=600,
     )
-    data = _safe_json_parse(rsp.choices[0].message.content)
-    chars: Dict[str, Character] = {
-        k: Character(id=str(uuid4()), **v) for k, v in data["characters"].items()
-    }
+    data  = _safe_json_parse(resp.choices[0].message.content)
+    chars = {k: Character(id=str(uuid4()), **v) for k, v in data["characters"].items()}
     return WorldState(
-        genre_tags=tags,
-        summary=data["summary"],
-        main_plot=data["main_plot"],
-        characters=chars,
-        timeline=[],
-        flags={},  # current_event_text / last_options / last_choice_text / karma
+        genre_tags = tags,
+        summary    = data["summary"],
+        main_plot  = data["main_plot"],
+        characters = chars,
+        timeline   = [],
+        flags      = {},
     )
 
 # ────────── 生成事件 ──────────
-def generate_event(world: WorldState, retry:int=1) -> dict:
+def generate_event(world: WorldState, lang: str = "zh", retry: int = 1) -> dict:
     prompt = EVENT_PROMPT.render(
         summary     = world.summary,
         main_plot   = world.main_plot,
         last_event  = world.flags.get("current_event_text",""),
         last_choice = world.flags.get("last_choice_text",""),
     )
-    rsp = client.chat.completions.create(
-        model=MODEL,
+    resp = client.chat.completions.create(
+        model   = MODEL,
         messages=[
-            {"role":"system","content":STYLE_HINT},
-            {"role":"user","content":prompt},
+            {"role":"system","content": STYLE_HINT + lang_hint(lang)},
+            {"role":"user","content": prompt},
         ],
         response_format={"type":"json_object"},
         max_tokens=500,
         temperature=0.7,
     )
     try:
-        return _safe_json_parse(rsp.choices[0].message.content)
+        return _safe_json_parse(resp.choices[0].message.content)
     except json.JSONDecodeError:
         if retry:
             time.sleep(0.5)
-            return generate_event(world, retry-1)
+            return generate_event(world, lang, retry-1)
         raise
 
-# ────────── 处理选择 ──────────
 # ────────── 结算选择 ──────────
 def apply_choice(
     world: WorldState,
     choice_id: str | None,
     options: list[dict],
     custom_input: str | None = None,
-) -> tuple[WorldState, str]:
-    """
-    • choice_id：玩家点的 A/B/C；None 表示走自定义输入
-    • custom_input：自由输入文本；None 表示按钮逻辑
-    返回 (world, narration)；narration 只做即时反馈 + 业障变化，不展开剧情
-    """
+    lang: str = "zh"
+) -> Tuple[WorldState, str]:
 
-    # ── 1) 计算 impact & 得到一句即时反馈 ─────────────────────────
+    # ① 即时反馈 & impact
     if custom_input:
-        # 让 GPT 只给一句反馈
         prompt = (
             f"玩家自由行动：{custom_input}\n"
             "请严格返回 JSON："
             '{"narration":"(一句话描述玩家选择)","impact":(-1|0|1)}'
         )
-        rsp = client.chat.completions.create(
-            model=MODEL,
+        resp = client.chat.completions.create(
+            model   = MODEL,
             messages=[
-                {"role":"system","content":STYLE_HINT},
-                {"role":"user","content":prompt},
+                {"role":"system","content": STYLE_HINT + lang_hint(lang)},
+                {"role":"user","content": prompt},
             ],
             response_format={"type":"json_object"},
             max_tokens=120,
             temperature=0.7,
         )
-        data       = _safe_json_parse(rsp.choices[0].message.content)
-        instant_fb = data.get("narration","")
-        impact     = data.get("impact",0)
+        d          = _safe_json_parse(resp.choices[0].message.content)
+        instant_fb = d.get("narration","")
+        impact     = d.get("impact",0)
         choice_txt = custom_input
     else:
-        # 按钮分支
         opt        = next(o for o in options if o["id"] == choice_id.upper())
         choice_txt = opt["text"]
         impact     = opt.get("impact",0)
         instant_fb = f"你选择了【{choice_txt}】。"
 
-    # ── 2) 更新业障 & 时间线 ────────────────────────────────────
+    # ② 更新业障 & 时间线
     karma = world.flags.get("karma",0) + impact
     world.flags["karma"] = karma
-
     world.timeline.append({
         "event" : world.flags.get("current_event_text",""),
         "choice": choice_txt,
         "impact": impact,
         "karma" : karma,
     })
-
-    # 把本轮选择写入 flags，供下一幕 prompt 承接
     world.flags["last_choice_text"] = choice_txt
 
-    # ── 3) 拼最终旁白（即时反馈 + 业障数字） ───────────────────
     narration = f"{instant_fb} 业障变化 {impact:+d}，当前业障 {karma}。"
     return world, narration
 
 # ────────── 生成结局 ──────────
-def generate_ending(world: WorldState, retry:int=1) -> dict:
+def generate_ending(world: WorldState, lang: str = "zh", retry: int = 1) -> dict:
     prompt = ENDING_PROMPT.render(
-        summary  = world.summary,
-        main_plot= world.main_plot,
-        timeline = world.timeline,
-        karma    = world.flags.get("karma",0),
+        summary   = world.summary,
+        main_plot = world.main_plot,
+        timeline  = world.timeline,
+        karma     = world.flags.get("karma",0),
     )
-    rsp = client.chat.completions.create(
-        model=MODEL,
+    resp = client.chat.completions.create(
+        model   = MODEL,
         messages=[
-            {"role":"system","content":STYLE_HINT},
-            {"role":"user","content":prompt},
+            {"role":"system","content": STYLE_HINT + lang_hint(lang)},
+            {"role":"user","content": prompt},
         ],
         response_format={"type":"json_object"},
         max_tokens=500,
         temperature=0.7,
     )
     try:
-        return _safe_json_parse(rsp.choices[0].message.content)
+        return _safe_json_parse(resp.choices[0].message.content)
     except json.JSONDecodeError:
         if retry:
             time.sleep(0.5)
-            return generate_ending(world, retry-1)
+            return generate_ending(world, lang, retry-1)
         raise

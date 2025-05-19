@@ -1,190 +1,172 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
 <meta charset="utf-8"/>
 <title>Gamo RPG</title>
 <style>
-body{font-family:sans-serif;max-width:620px;margin:40px auto;padding:0 12px;color:#222}
-.bubble{background:#f6f6f6;border-radius:8px;padding:12px;margin:8px 0}
-button{margin:6px 6px 0 0;padding:6px 14px;border:0;border-radius:6px;
-       background:#2563eb;color:#fff;font-size:14px;cursor:pointer}
+body      {font-family:sans-serif;max-width:620px;margin:40px auto;padding:0 12px;color:#222}
+.bubble   {background:#f6f6f6;border-radius:8px;padding:12px;margin:8px 0}
+button    {margin:6px 6px 0 0;padding:6px 14px;border:0;border-radius:6px;
+           background:#2563eb;color:#fff;font-size:14px;cursor:pointer}
 button:disabled{background:#aaa}
-/* ─── 加载中的转圈 ─────────────────────── */
+/* ─── Spinner 固定居中 ───────────────────────────────── */
 #loader{
-  display:none;
-  position:fixed;          /* ★ 脱离文档流，固定在屏幕 */
-  top:50%; left:50%;
-  transform:translate(-50%,-50%);
-  width:40px;height:40px;
-  border:4px solid #f3f3f3;
-  border-top:4px solid #2563eb;
-  border-radius:50%;
-  animation:spin 1s linear infinite;
-  z-index:9999;            /* 盖过一切 */
+  display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #2563eb;border-radius:50%;
+  animation:spin 1s linear infinite;z-index:9999;
 }
-@keyframes spin{
-  0%{ transform:rotate(0deg); }
-  100%{ transform:rotate(360deg); }
-}
-.btn{margin:4px;padding:6px 12px;border:0;border-radius:6px;cursor:pointer}
-.btnA{background:#99eb;color:#fff}
-.btnExec{background:#99a;color:#fff}
-.btnEnd{background:#99f;color:#fff}
+@keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
 </style>
 </head>
+
 <body onload="resetUI()">
 <h2>🌟 Gamo RPG Demo</h2>
-<input id="tagInput" style="padding:6px;width:60%" placeholder="输入关键词，用逗号分隔，例如“穿越，搞笑”">
-<button onclick="start()" style="padding:6px 12px;margin-left:6px">开始冒险</button>
+
+<select onchange="switchLang(this.value)">
+  <option value="zh">中文</option>
+  <option value="en">English</option>
+</select>
+
+<input id="tagInput" placeholder="输入关键词，用逗号分隔，例如“穿越,搞笑”" style="padding:6px;width:60%">
+<button id="startBtn" onclick="start()">开始冒险</button>
+
 <div id="loader"></div>
+<h3 id="intro"></h3>        <!-- 世界观/主线展示区 -->
 <div id="history"></div>
 <div id="choices"></div>
-<button onclick="restart()" style="margin-top:12px">重新开始</button>
-<h3 id="plot"></h3>
+<button id="restartBtn" onclick="restart()" style="margin-top:12px">重新开始</button>
 
 <script>
-const API="https://gamo.onrender.com";   // ← BACKEND
-const hist=document.getElementById("history");
-const box=document.getElementById("choices");
+/* ─── 全局变量 ───────────────────────────────────────────── */
+const API  = "https://gamo.onrender.com";
+const hist = document.getElementById("history");
+const box  = document.getElementById("choices");
+const intro= document.getElementById("intro");
 const loader = document.getElementById("loader");
-function showLoader(){ loader.style.display = "block"; }
-function hideLoader(){ loader.style.display = "none"; }
+
+const i18n = {
+  zh:{ start:"开始冒险", exec:"执行", ending:"生成结局", restart:"重新开始",
+       placeholder:"输入关键词，用逗号分隔，例如“穿越,搞笑”", free:"自由输入…"},
+  en:{ start:"Start",     exec:"Go",   ending:"End Story", restart:"Restart",
+       placeholder:"Enter tags, e.g. isekai, comedy",     free:"Free action…"}
+};
+let lang = localStorage.getItem("lang") || "zh";
+
+/* ─── 工具函数 ────────────────────────────────────────────── */
+function t(k){return i18n[lang][k]||k;}
+function showLoader(){loader.style.display="block";}
+function hideLoader(){loader.style.display="none";}
+
+function switchLang(l){
+  lang=l;localStorage.setItem("lang",l);
+  document.getElementById("startBtn").textContent = t("start");
+  document.getElementById("restartBtn").textContent = t("restart");
+  document.getElementById("tagInput").placeholder   = t("placeholder");
+  // choices 区里的按钮在 renderButtons 时会根据 t() 更新
+}
 
 function resetUI(){
-  document.getElementById("history").innerHTML = "";
-  document.getElementById("choices").innerHTML = "";
-}
-function showMainPlot(text){
-  document.getElementById("plot").textContent = "🎯 主线目标：「" + text + "」";
-}
-async function api(path, body){
-  showLoader();
-  const res = await fetch(`${API}/${path}`, {
-    method: "POST",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify(body),
-    credentials: "include"          // ★ 跨域携带 cookie!
-  });
-  hideLoader();
-
-  if(!res.ok){
-    const txt = await res.text();
-    alert(`服务器错误:\n${txt}`);
-    throw new Error(txt);
-  }
-  return res.json();
+  intro.innerHTML="";
+  hist.innerHTML="";
+  box.innerHTML="";
 }
 
-function add(text){           // 渲染事件文字
-  hist.innerHTML+=`<div class="bubble">${text.replace(/\\n/g,'<br>')}</div>`;
+function add(html){
+  hist.insertAdjacentHTML("beforeend",`<div class="bubble">${html}</div>`);
   window.scrollTo(0,document.body.scrollHeight);
 }
 
-function renderButtons(opts){
-  const box   = document.getElementById("choices");
-  box.innerHTML = "";                       // 清空旧内容
+/* ─── 调后端 API（自动携带 lang & cookie） ──────────────── */
+async function api(path, body){
+  body = {...body, lang};
+  showLoader();
+  const res = await fetch(`${API}/${path}`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body),
+    credentials:"include"
+  });
+  hideLoader();
+  if(!res.ok){ alert(await res.text()); throw new Error("api error"); }
+  return res.json();
+}
 
-  /* ====== 1. A/B/C 按钮 ====== */
+/* ─── 渲染按钮 + 自由输入 + 结局 ────────────────────────── */
+function renderButtons(opts){
+  box.innerHTML = "";
+
+  /* A/B/C */
   opts.forEach(o=>{
-    const btn=document.createElement("button");
-    btn.textContent = `${o.id}. ${o.text}`;
-    btn.onclick     = ()=>choose(o.id);
-    btn.style = "margin:4px;padding:6px 12px;background:#2563eb;color:#fff;border:0;border-radius:6px;cursor:pointer";
-    box.appendChild(btn);
+    const b=document.createElement("button");
+    b.textContent=`${o.id}. ${o.text}`;
+    b.onclick=()=>choose(o.id);
+    box.appendChild(b);
   });
 
-  /* ====== 2. 自由输入框 + 执行按钮 ====== */
-  if(opts.length){                          // 生成事件才显示
-    const input = document.createElement("input");
-    input.id = "customInput";
-    input.placeholder = "自由输入…";
-    input.style = "margin:4px 6px;padding:6px;flex:1";
+  if(opts.length){
+    /* 自由输入 */
+    const inp=document.createElement("input");
+    inp.id="customInput";inp.placeholder=t("free");
+    box.appendChild(inp);
 
-    const exec = document.createElement("button");
-    exec.textContent = "执行";
-    exec.onclick     = customAct;
-    exec.style = "margin:4px;padding:6px 12px;background:#16a34a;color:#fff;border:0;border-radius:6px;cursor:pointer";
-
-    box.appendChild(input);
+    const exec=document.createElement("button");
+    exec.id="execBtn";exec.textContent=t("exec");
+    exec.onclick=customAct;
     box.appendChild(exec);
 
-    // 回车直接执行
-    input.addEventListener("keydown", e=>{
-      if(e.key==="Enter") customAct();
-    });
-  }
+    inp.addEventListener("keydown",e=>e.key==="Enter"&&customAct());
 
-  /* ====== 3. 生成结局按钮 ====== */
-  if(opts.length){                          // 有选项时才可随时结局
-    const endBtn = document.createElement("button");
-    endBtn.textContent = "生成结局";
-    endBtn.onclick     = endGame;
-    endBtn.style = "margin:4px;padding:6px 12px;background:#dc2626;color:#fff;border:0;border-radius:6px;cursor:pointer";
-    box.appendChild(endBtn);
+    /* 结局按钮 */
+    const end=document.createElement("button");
+    end.id="endBtn";end.textContent=t("ending");
+    end.onclick=endGame;
+    end.style.background="#dc2626";
+    box.appendChild(end);
   }
 }
 
-function disable(){
-  // 挑选最常用的三类按钮
-  const selectors = [
-    "#choices button",         // A/B/C + 执行 + 生成结局
-    "#loader + button",        // "重新开始" 按钮（看实际结构可删）
-  ];
+function disable(){ box.querySelectorAll("button").forEach(b=>b.disabled=true); }
 
-  document.querySelectorAll(selectors.join(",")).forEach(btn=>{
-    btn.disabled = true;
-  });
-}async function customAct(){
-  const text = document.getElementById("customInput").value.trim();
-  if(!text) return;
-  document.getElementById("customInput").value="";
-  const d = await api("choice", { custom_input: text });
+/* ─── 前端逻辑 ───────────────────────────────────────────── */
+async function start(){
+  resetUI();
+  const tags = document.getElementById("tagInput").value
+               .split(",").map(s=>s.trim()).filter(Boolean);
+  if(!tags.length){ alert(t("placeholder")); return; }
+
+  const data = await api("new",{tags});
+  intro.innerHTML = `🌍 ${data.summary}<br>🎯 ${data.main_plot}`;
+  add(data.event.text);
+  renderButtons(data.event.options);
+}
+
+async function choose(id){
+  disable();
+  const d = await api("choice",{choice_id:id});
   add(d.result);
   add(d.event.text);
   renderButtons(d.event.options);
 }
-async function start(){
-  resetUI();                           // 清空历史、按钮
-  const tags = document.getElementById("tagInput").value
-                 .split(",").map(s=>s.trim()).filter(Boolean);
-  if(!tags.length){
-    alert("请输入至少一个关键词开始游戏");
-    return;
-  }
 
-  const data = await api("new", tags);      // ← fetch /new
-
-  /* ★★ 把世界简介 & 主线写在最顶上一条 ★★ */
-  add("🌍 世界观简介：<br>"+ data.summary);
-  add("🎯 主线目标："+ data.main_plot);
-
-  /* 渲染第一幕 */
-  add(data.event.text);
-  renderButtons(data.event.options);
-}
-async function choose(id){
-  disable();
-  const d = await api("choice", { choice_id: id });   // ★ 发送 JSON 对象
-  add(d.result);
-  add(d.event.text);
+async function customAct(){
+  const inp=document.getElementById("customInput");
+  const txt=inp.value.trim();
+  if(!txt) return;
+  inp.value="";
+  const d = await api("choice",{custom_input:txt});
+  add(d.result);add(d.event.text);
   renderButtons(d.event.options);
 }
 
 async function endGame(){
-  disable();               // 先把所有旧按钮灰掉
-  showLoader();
-  const d = await api("end", {});
-  hideLoader();
-
-  document.getElementById("choices").innerHTML = "";
-  add("=== 结局 · " + d.title + " ===");
-  add(d.ending);
+  disable();showLoader();
+  const d = await api("end",{});
+  hideLoader();box.innerHTML="";
+  add(`<b>=== ${d.title} ===</b>`);add(d.ending);
 }
 
-
-function restart(){start();}
-
-start();
+/* ─── 自动初始化当前语言文本 ────────────────────────────── */
+switchLang(lang);
 </script>
 </body>
 </html>
