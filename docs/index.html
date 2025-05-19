@@ -2,32 +2,58 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8"/>
-<title>Gamo RPG</title>
+<!-- ① 让浏览器用设备宽度布局、禁止缩放 -->
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+
+<title>Gamo RPG Demo</title>
 
 <style>
-/* ——— 布局 & 主题 ——— */
-body{font-family:sans-serif;max-width:620px;margin:40px auto;padding:0 12px;color:#222}
-h2{margin-top:0}
-.bubble{background:#f6f6f6;border-radius:8px;padding:12px;margin:8px 0}
-button{margin:6px 6px 0 0;padding:6px 14px;border:0;border-radius:6px;
-       background:#2563eb;color:#fff;font-size:14px;cursor:pointer}
+/* —— 通用 —— */
+:root{
+  --blue:#2563eb;
+  --green:#16a34a;
+  --red:#dc2626;
+  --maxW:620px;
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+  max-width:var(--maxW);
+  margin:40px auto;padding:0 12px;color:#222;
+}
+
+/* —— 气泡 —— */
+.bubble{background:#f6f6f6;border-radius:8px;padding:12px;margin:8px 0;}
+
+/* —— 按钮 —— */
+button{
+  margin:6px 6px 0 0;padding:10px 16px;
+  border:0;border-radius:6px;font-size:15px;cursor:pointer;
+  background:var(--blue);color:#fff;
+}
 button:disabled{background:#aaa}
 
-/* ——— Spinner 固定屏中 ——— */
+/* —— Spinner —— */
 #loader{
-  display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #2563eb;
+  display:none;position:fixed;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:40px;height:40px;border:4px solid #eee;border-top:4px solid var(--blue);
   border-radius:50%;animation:spin 1s linear infinite;z-index:9999;
 }
-@keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+@keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360)}}
 
-/* ——— 语言选择悬浮 ——— */
-#langBox{
-  position:fixed;top:12px;right:12px;z-index:1000;
-  background:#fff;padding:4px 6px;border-radius:6px;
-  box-shadow:0 0 4px rgba(0,0,0,.08);font-size:14px;
+/* —— 语言框固定右上 —— */
+#langBox{position:fixed;top:12px;right:12px;z-index:1000;
+         background:#fff;padding:4px 6px;border-radius:6px;
+         box-shadow:0 0 4px rgba(0,0,0,.08);}
+#langBox select{margin-left:4px;padding:4px}
+
+/* —— 手机端优化 —— */
+@media(max-width:480px){
+  body{margin:20px 8px;font-size:16px;}
+  button{width:100%;margin:6px 0;font-size:16px}
+  #tagInput{width:100%;margin-bottom:8px}
+  #langBox{position:static;margin-bottom:12px;box-shadow:none}
 }
-#langBox select{margin-left:4px}
 </style>
 </head>
 
@@ -36,141 +62,133 @@ button:disabled{background:#aaa}
 
 <!-- 语言选择 -->
 <div id="langBox">
-  <label id="langLabel" for="langSel">语言:</label>
+  <label id="langLabel" for="langSel">Language:</label>
   <select id="langSel" onchange="switchLang(this.value)">
     <option value="zh">中文</option>
     <option value="en">English</option>
   </select>
 </div>
 
-<!-- 关键词输入 & 开始 -->
-<input id="tagInput" style="padding:6px;width:60%" placeholder="输入关键词，用逗号分隔，例如“穿越,搞笑”">
-<button id="startBtn" onclick="start()">开始冒险</button>
+<!-- 关键词 + Start -->
+<input id="tagInput" placeholder="Enter tags, e.g. isekai, comedy" style="padding:8px;width:60%">
+<button id="startBtn" onclick="start()">Start</button>
 
+<!-- 运行区 -->
 <div id="loader"></div>
-<h3 id="intro"></h3>      <!-- 🌍 世界观 + 🎯 主线 -->
-<div id="history"></div> <!-- 剧情气泡 -->
-<div id="choices"></div> <!-- 按钮区 -->
-<button id="restartBtn" onclick="restart()" style="margin-top:12px">重新开始</button>
+<h3 id="intro"></h3>
+<div id="history"></div>
+<div id="choices"></div>
+
+<button id="restartBtn" onclick="restart()">Restart</button>
 
 <script>
-/* ——— 全局常量 / 状态 ——— */
-const API  = "https://gamo.onrender.com";
-const hist = document.getElementById("history");
-const box  = document.getElementById("choices");
-const intro= document.getElementById("intro");
-const loader = document.getElementById("loader");
+/* ========= 同之前 ========= */
+const API="https://gamo.onrender.com";
+const hist=document.getElementById("history");
+const box =document.getElementById("choices");
+const intro=document.getElementById("intro");
+const loader=document.getElementById("loader");
 
-const i18n = {
-  zh:{ start:"开始冒险", exec:"执行", ending:"生成结局", restart:"重新开始",
-       placeholder:"输入关键词，用逗号分隔，例如“穿越,搞笑”", free:"自由输入…"},
-  en:{ start:"Start",     exec:"Go",   ending:"End Story", restart:"Restart",
-       placeholder:"Enter tags, e.g. isekai, comedy",      free:"Free action…"}
+const i18n={
+  zh:{start:"开始冒险",exec:"执行",ending:"生成结局",restart:"重新开始",
+      placeholder:"输入关键词，用逗号分隔，例如“穿越,搞笑”",free:"自由输入…"},
+  en:{start:"Start",exec:"Go",ending:"End Story",restart:"Restart",
+      placeholder:"Enter tags, e.g. isekai, comedy",free:"Free action…"}
 };
-let lang = localStorage.getItem("lang") || "zh";
-let SID = null;
+let lang=localStorage.getItem("lang")||"zh";
+let SID=null;
 
-/* ——— 工具函数 ——— */
-const t         = k => i18n[lang][k] || k;
-const showLoad  = () => loader.style.display="block";
-const hideLoad  = () => loader.style.display="none";
-const restart   = () => location.reload();
-
+function t(k){return i18n[lang][k]||k}
+function showLoader(){loader.style.display="block"}
+function hideLoader(){loader.style.display="none"}
+function restart(){location.reload()}
 function switchLang(l){
-  lang = l; localStorage.setItem("lang", l);
-  document.getElementById("langSel").value = l;
-  document.getElementById("startBtn").textContent = t("start");
-  document.getElementById("restartBtn").textContent = t("restart");
-  document.getElementById("tagInput").placeholder  = t("placeholder");
-  document.getElementById("langLabel").textContent = (l==="zh")?"语言:":"Language:";
+  lang=l;localStorage.setItem("lang",l);
+  document.getElementById("langSel").value=l;        // ← 保持下拉同步
+  document.getElementById("startBtn").textContent=t("start");
+  document.getElementById("restartBtn").textContent=t("restart");
+  document.getElementById("tagInput").placeholder=t("placeholder");
+  document.getElementById("langLabel").textContent=(l==="zh")?"语言:":"Language:";
 }
-
-
-function resetUI(){ intro.innerHTML=hist.innerHTML=box.innerHTML=""; }
-
+function resetUI(){intro.innerHTML="";hist.innerHTML="";box.innerHTML=""}
 function add(html){
-  hist.insertAdjacentHTML("beforeend", `<div class="bubble">${html}</div>`);
-  window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});
+  hist.insertAdjacentHTML("beforeend",`<div class="bubble">${html}</div>`);
+  window.scrollTo(0,document.body.scrollHeight);
 }
 
-/* ——— 通用 fetch (自动附带 lang & cookie) ——— */
-async function api(path, body){
-  body = {...body, lang, sid: SID};
-  showLoad();
-  const res = await fetch(`${API}/${path}`,{
+async function api(path,body){
+  body={...body,lang,sid:SID};
+  showLoader();
+  const res=await fetch(`${API}/${path}`,{
     method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(body),credentials:"include"
-  });
-  hideLoad();
-  if(!res.ok){ alert(await res.text()); throw new Error("api error"); }
+    body:JSON.stringify(body),credentials:"include"});
+  hideLoader();
+  if(!res.ok){alert(await res.text());throw new Error("api error")}
   return res.json();
 }
 
-/* ——— 渲染选项 / 自由输入 / 结局按钮 ——— */
-function renderButtons(opts){
-  box.innerHTML = "";
-
-  /* A/B/C 选项 */
-  opts.forEach(o=>{
-    const b = document.createElement("button");
-    b.textContent = `${o.id}. ${o.text}`;
-    b.onclick     = ()=>choose(o.id);
-    box.appendChild(b);
-  });
-
-  if(!opts.length) return;           // 首次加载失败 safety
-
-  /* 自由输入 + 执行 */
-  const inp = document.createElement("input");
-  inp.id="customInput"; inp.placeholder=t("free"); box.appendChild(inp);
-
-  const exec = document.createElement("button");
-  exec.id="execBtn"; exec.textContent=t("exec");
-  exec.onclick=customAct; exec.style.background="#16a34a"; box.appendChild(exec);
-  inp.addEventListener("keydown",e=>e.key==="Enter"&&customAct());
-
-  /* 结局生成 */
-  const end = document.createElement("button");
-  end.id="endBtn"; end.textContent=t("ending");
-  end.onclick=endGame; end.style.background="#dc2626"; box.appendChild(end);
-}
-
-function disable(){ box.querySelectorAll("button").forEach(b=>b.disabled=true); }
-
-/* ——— 前端主流程 ——— */
+/* ---------- 游戏逻辑 ---------- */
 async function start(){
   resetUI();
-  const tags = document.getElementById("tagInput").value
-               .split(",").map(s=>s.trim()).filter(Boolean);
-  if(!tags.length){ alert(t("placeholder")); return; }
-
-  const d = await api("new",{tags});
-  SID = d.sid;
-  intro.innerHTML = `🌍 ${d.summary}<br>🎯 ${d.main_plot}`;
-  add(d.event.text);
-  renderButtons(d.event.options);
+  const tags=document.getElementById("tagInput").value.split(",").map(s=>s.trim()).filter(Boolean);
+  if(!tags.length){alert(t("placeholder"));return;}
+  const d=await api("new",{tags});
+  SID=d.sid;                                 // 保存 sid
+  intro.innerHTML=`🌍 ${d.summary}<br>🎯 ${d.main_plot}`;
+  add(d.event.text);renderButtons(d.event.options);
 }
 
 async function choose(id){
   disable();
-  const d = await api("choice",{choice_id:id});
-  add(d.result); add(d.event.text); renderButtons(d.event.options);
+  const d=await api("choice",{choice_id:id});
+  add(d.result);add(d.event.text);renderButtons(d.event.options);
 }
 
 async function customAct(){
   const inp=document.getElementById("customInput");
-  const txt=inp.value.trim(); if(!txt) return; inp.value="";
-  const d = await api("choice",{custom_input:txt});
-  add(d.result); add(d.event.text); renderButtons(d.event.options);
+  const txt=inp.value.trim();if(!txt)return;
+  inp.value="";
+  const d=await api("choice",{custom_input:txt});
+  add(d.result);add(d.event.text);renderButtons(d.event.options);
 }
 
 async function endGame(){
-  disable(); showLoad();
-  const d = await api("end",{}); hideLoad(); box.innerHTML="";
-  add(`<b>=== ${d.title} ===</b>`); add(d.ending);
+  disable();showLoader();
+  const d=await api("end",{});
+  hideLoader();box.innerHTML="";
+  add(`<b>=== ${d.title} ===</b>`);add(d.ending);
 }
 
-/* ——— 初始化语言文本 ——— */
+/* ---------- UI ---------- */
+function renderButtons(opts){
+  box.innerHTML="";
+  opts.forEach(o=>{
+    const b=document.createElement("button");
+    b.textContent=`${o.id}. ${o.text}`;b.onclick=()=>choose(o.id);
+    box.appendChild(b);
+  });
+  if(opts.length){
+    const inp=document.createElement("input");
+    inp.id="customInput";inp.placeholder=t("free");
+    box.appendChild(inp);
+
+    const exec=document.createElement("button");
+    exec.id="execBtn";exec.textContent=t("exec");
+    exec.style.background=varCSS("--green");
+    exec.onclick=customAct;box.appendChild(exec);
+
+    inp.addEventListener("keydown",e=>e.key==="Enter"&&customAct());
+
+    const end=document.createElement("button");
+    end.id="endBtn";end.textContent=t("ending");
+    end.style.background=varCSS("--red");
+    end.onclick=endGame;box.appendChild(end);
+  }
+}
+function disable(){box.querySelectorAll("button").forEach(b=>b.disabled=true)}
+function varCSS(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim()}
+
+/* ---------- 初始化 ---------- */
 switchLang(lang);
 </script>
 </body>
