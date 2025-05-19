@@ -68,6 +68,7 @@ const i18n = {
        placeholder:"Enter tags, e.g. isekai, comedy",      free:"Free action…"}
 };
 let lang = localStorage.getItem("lang") || "zh";
+let SID = null;
 
 /* ——— 工具函数 ——— */
 const t         = k => i18n[lang][k] || k;
@@ -84,6 +85,7 @@ function switchLang(l){
   document.getElementById("langLabel").textContent = (l==="zh")?"语言:":"Language:";
 }
 
+
 function resetUI(){ intro.innerHTML=hist.innerHTML=box.innerHTML=""; }
 
 function add(html){
@@ -93,7 +95,7 @@ function add(html){
 
 /* ——— 通用 fetch (自动附带 lang & cookie) ——— */
 async function api(path, body){
-  body = {...body, lang};
+  body = {...body, lang, sid: SID};
   showLoad();
   const res = await fetch(`${API}/${path}`,{
     method:"POST",headers:{"Content-Type":"application/json"},
@@ -143,6 +145,7 @@ async function start(){
   if(!tags.length){ alert(t("placeholder")); return; }
 
   const d = await api("new",{tags});
+  SID = d.sid;
   intro.innerHTML = `🌍 ${d.summary}<br>🎯 ${d.main_plot}`;
   add(d.event.text);
   renderButtons(d.event.options);

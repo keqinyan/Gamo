@@ -43,6 +43,7 @@ class NewGameIn(BaseModel):
     lang: str = "zh"
 
 class ChoiceIn(BaseModel):
+    sid: str
     choice_id: str | None = None
     custom_input: str | None = None
     lang: str = "zh"
@@ -68,6 +69,7 @@ def new_game(
     SESSIONS[sid] = ws
 
     return {
+        "sid": sid,   
         "summary"   : ws.summary,
         "main_plot" : ws.main_plot,
         "event"     : evt,
@@ -79,10 +81,12 @@ def choose(
     resp: Response,
     body: ChoiceIn = Body(...),
 ):
-    sid = get_sid(req, resp)
+    sid = body.sid
+    if not sid or sid not in SESSIONS:
+        raise HTTPException(400, "请先开局")
     ws  = SESSIONS.get(sid)
     if ws is None:
-        raise HTTPException(400, "请先 /new 开局")
+        raise HTTPException(400, "请先开局")
 
     # 判定按钮 / 自定义
     if body.custom_input:
