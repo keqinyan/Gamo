@@ -54,6 +54,7 @@ EVENT_PROMPT = Template("""
 {% endif %}
 
 请编排下一幕，**必须推动主线目标至少一点**，并提供 3 个选项。
+Return strict JSON with a top-level key "options".
 严格返回 JSON：
 {
   "text":"...",
@@ -117,26 +118,34 @@ def generate_event(world: WorldState, lang: str = "zh", retry: int = 1) -> dict:
     prompt = EVENT_PROMPT.render(
         summary     = world.summary,
         main_plot   = world.main_plot,
-        last_event  = world.flags.get("current_event_text",""),
-        last_choice = world.flags.get("last_choice_text",""),
+        last_event  = world.flags.get("current_event_text", ""),
+        last_choice = world.flags.get("last_choice_text", ""),
     )
     resp = client.chat.completions.create(
-        model   = MODEL,
+        model = MODEL,
         messages=[
-            {"role":"system","content": STYLE_HINT + lang_hint(lang)},
-            {"role":"user","content": prompt},
+            {"role": "system", "content": STYLE_HINT + lang_hint(lang)},
+            {"role": "user",   "content": prompt},
         ],
-        response_format={"type":"json_object"},
+        response_format={"type": "json_object"},
         max_tokens=500,
         temperature=0.7,
     )
+
     try:
-        return _safe_json_parse(resp.choices[0].message.content)
+        raw = _safe_json_parse(resp.choices[0].message.content)
     except json.JSONDecodeError:
         if retry:
             time.sleep(0.5)
-            return generate_event(world, lang, retry-1)
+            return generate_event(world, lang, retry - 1)
         raise
+
+    # ★★★—— 兜底：把 choices / Options 映射到 options ——★★★
+    if "options" not in raw:
+        raw["options"] = raw.get("choices") or raw.get("Choices") or raw.get("Options") or []
+
+    return raw
+
 
 # ────────── 结算选择 ──────────
 def apply_choice(

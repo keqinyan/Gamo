@@ -71,6 +71,7 @@ let lang = localStorage.getItem("lang") || "zh";
 function t(k){return i18n[lang][k]||k;}
 function showLoader(){loader.style.display="block";}
 function hideLoader(){loader.style.display="none";}
+function restart(){ location.reload(); }
 
 function switchLang(l){
   lang=l;localStorage.setItem("lang",l);
