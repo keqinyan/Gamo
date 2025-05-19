@@ -83,16 +83,31 @@ ENDING_PROMPT = Template("""
 
 # ────────── 通用解析器 ──────────
 def _safe_json_parse(text: str) -> dict:
-    """尽量从 LLM 输出里扣出 JSON 对象"""
-    # 去掉 ```json\n ... \n``` 包裹
-    cleaned = re.sub(r"```json|```", "", text, flags=re.I).strip()
+    """
+    最宽容的 JSON 提取：
+    1. 去掉 ```json ``` 包裹、``` 等
+    2. 去掉行首 // 或 # 的注释
+    3. 把裸回车 \n 替成 空格，\t 替成 空格
+    4. 捕获第一个 {...}
+    """
+    # 1. code fence
+    cleaned = re.sub(r"```[\s\S]*?```", "", text, flags=re.I).strip()
+
+    # 2. 行注释
+    cleaned = re.sub(r"^\s*(//|#).*$", "", cleaned, flags=re.M)
+
+    # 3. 裸换行、制表
+    cleaned = cleaned.replace("\n", " ").replace("\t", " ")
+
+    # 4. 直接尝试
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", cleaned, re.S)
+        m = re.search(r"\{.*\}", cleaned)
         if m:
             return json.loads(m.group())
         raise
+
 
 
 # ────────── 生成世界观 ──────────
@@ -136,13 +151,25 @@ def generate_event(world: WorldState, lang: str = "zh", retry: int = 1) -> dict:
         temperature=0.7,
     )
 
-    try:
-        raw = _safe_json_parse(resp.choices[0].message.content)
-    except json.JSONDecodeError:
-        if retry:
-            time.sleep(0.5)
-            return generate_event(world, lang, retry - 1)
-        raise
+    for attempt in range(2):
+        try:
+            raw = _safe_json_parse(rsp.choices[0].message.content)
+            break
+        except json.JSONDecodeError:
+            if attempt == 0:
+                # 再给 GPT 一次机会，提示 ONLY JSON
+                rsp = client.chat.completions.create(
+                    model=MODEL,
+                    messages=[
+                        {"role":"system","content":STYLE_HINT + lang_hint(lang)},
+                        {"role":"user","content": prompt + "\n\n⚠️Only JSON!"},
+                    ],
+                    response_format={"type":"json_object"},
+                    max_tokens=120,
+                    temperature=0.7,
+                )
+            else:
+                raise
 
     # ★★★—— 兜底：把 choices / Options 映射到 options ——★★★
     if "options" not in raw:
